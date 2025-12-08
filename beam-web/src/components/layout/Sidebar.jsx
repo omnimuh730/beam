@@ -103,7 +103,7 @@ const App = () => {
 				<div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #303030' }}>
 					<div style={{ display: 'flex', gap: '16px' }}>
 					</div>
-					<Button type="primary" shape="circle" icon={<QuestionCircleOutlined />} />
+					<Button shape="circle" icon={<QuestionCircleOutlined />} />
 				</div>
 			</div>
 		</ConfigProvider>

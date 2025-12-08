@@ -74,16 +74,13 @@ const initialData = [
 ];
 
 const App = () => {
-	// State
 	const [selectedIds, setSelectedIds] = useState([]);
-	const [activeEmailId, setActiveEmailId] = useState(null); // ID of email currently open
+	const [activeEmailId, setActiveEmailId] = useState(null);
 	const [hoveredId, setHoveredId] = useState(null);
 
-	// Derived state
 	const activeEmail = initialData.find(e => e.id === activeEmailId);
 	const isSelectionMode = selectedIds.length > 0;
 
-	// --- HANDLERS ---
 	const toggleSelection = (id, e) => {
 		e.stopPropagation();
 		if (selectedIds.includes(id)) {
@@ -98,7 +95,6 @@ const App = () => {
 		else setSelectedIds(initialData.map(e => e.id));
 	};
 
-	// Group data by "group" key (Today, Yesterday)
 	const groupedData = initialData.reduce((acc, item) => {
 		(acc[item.group] = acc[item.group] || []).push(item);
 		return acc;
@@ -110,33 +106,32 @@ const App = () => {
 				algorithm: theme.darkAlgorithm,
 				token: {
 					colorBgContainer: '#141414',
-					colorPrimary: '#177ddc', // Selection Blue
+					colorPrimary: '#8a83ff',
 				},
 			}}
 		>
 			<div style={{ display: 'flex', height: '100vh', background: '#141414', color: '#e0e0e0', overflow: 'hidden' }}>
 
-				{/* --- LEFT PANEL (EMAIL LIST) --- */}
+				{/* --- LEFT PANEL --- */}
 				<div style={{
-					flex: activeEmailId ? '0 0 450px' : '1', // Shrink if preview is open
+					flex: activeEmailId ? '0 0 450px' : '1',
 					display: 'flex',
 					flexDirection: 'column',
 					borderRight: '1px solid #303030',
-					transition: 'all 0.3s ease'
+					transition: 'all 0.3s cubic-bezier(0.2, 0, 0, 1)'
 				}}>
 
-					{/* HEADER: Dynamic based on Selection */}
+					{/* HEADER */}
 					<div style={{
-						padding: '12px 16px',
+						padding: '12px 24px',
 						height: '60px',
 						display: 'flex',
 						alignItems: 'center',
 						justifyContent: 'space-between',
-						background: isSelectionMode ? '#177ddc33' : 'transparent', // Light blue tint on selection
+						background: isSelectionMode ? '#1e1b2e' : 'transparent',
 						borderBottom: '1px solid #303030'
 					}}>
 						{isSelectionMode ? (
-							// ACTION HEADER
 							<>
 								<div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
 									<Checkbox
@@ -144,7 +139,7 @@ const App = () => {
 										indeterminate={selectedIds.length > 0 && selectedIds.length < initialData.length}
 										onChange={selectAll}
 									/>
-									<Text style={{ color: '#177ddc' }}>{selectedIds.length} selected</Text>
+									<Text style={{ color: '#8a83ff', fontWeight: 500 }}>{selectedIds.length} selected</Text>
 								</div>
 								<div style={{ display: 'flex', gap: '16px', fontSize: '18px', color: '#a0a0a0' }}>
 									<DeleteOutlined />
@@ -171,16 +166,18 @@ const App = () => {
 						)}
 					</div>
 
-					{/* LIST CONTENT */}
-					<div style={{ flex: 1, overflowY: 'auto' }}>
+					{/* LIST */}
+					<div style={{ flex: 1, overflowY: 'auto', padding: '0 12px' }}>
 						{Object.keys(groupedData).map(group => (
 							<div key={group}>
-								{/* Group Label */}
-								<div style={{ fontSize: '11px', color: '#656c82', letterSpacing: '0.35em', textTransform: 'uppercase' }}>
+								<div style={{
+									fontSize: '11px', color: '#656c82', letterSpacing: '0.1em',
+									textTransform: 'uppercase', height: 40, display: 'flex', alignItems: 'center',
+									padding: '0 16px', fontWeight: 600, marginTop: 8
+								}}>
 									{group}
 								</div>
 
-								{/* Rows */}
 								{groupedData[group].map(item => {
 									const isSelected = selectedIds.includes(item.id);
 									const isHovered = hoveredId === item.id;
@@ -195,116 +192,75 @@ const App = () => {
 											style={{
 												display: 'flex',
 												alignItems: 'center',
-												padding: '0px 28px',
+												padding: '0 16px', // Internal padding
+												margin: '0 0 2px 0', // Vertical gap between items
+												height: 40, // Fixed height for consistency
 												cursor: 'pointer',
-												background: isSelected ? '#191c26' : isHovered ? '#151822' : (isActive ? '#161922' : 'transparent'),
-												borderBottom: '1px solid #181a23',
-												borderLeft: isSelected ? '3px solid #8a83ff' : '3px solid transparent',
-												borderRadius: isSelected || isHovered ? 10 : 0,
-												maxHeight: 40,
-												transition: 'all 0.18s ease',
+												borderRadius: 8,
+												background: isSelected ? '#1e1b2e' : isHovered ? '#1f2129' : (isActive ? '#262626' : 'transparent'),
+												// Use box-shadow for the blue bar so it doesn't affect layout width (0 layout shift)
+												boxShadow: isSelected ? 'inset 3px 0 0 #8a83ff' : 'none',
+												transition: 'background 0.1s ease',
+												position: 'relative',
+												overflow: 'hidden'
 											}}
 										>
-											{/* Checkbox / Hover Area */}
-											<div
-												style={{ width: 28, display: 'flex', justifyContent: 'center' }}
-												onClick={(e) => e.stopPropagation()}
-											>
+											{/* Checkbox / Spacer */}
+											<div style={{ width: 28, display: 'flex', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
 												{(isHovered || isSelected) ? (
-													<Checkbox
-														checked={isSelected}
-														onChange={(e) => toggleSelection(item.id, e)}
-													/>
-												) : (
-													<div style={{ width: 16, height: 16 }} />
-												)}
+													<Checkbox checked={isSelected} onChange={(e) => toggleSelection(item.id, e)} />
+												) : null}
 											</div>
 
-											{/* Sender */}
-											<div style={{ width: 190, display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
-												<Text
-													strong={!item.read}
-													style={{
-														color: !item.read ? '#f7f9ff' : '#d6dae8',
-														fontSize: '13px',
-														whiteSpace: 'nowrap',
-														overflow: 'hidden',
-														textOverflow: 'ellipsis',
-													}}
-												>
-													{item.sender}
-												</Text>
-											</div>
-
-											{/* Subject + snippet */}
-											<div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-												<span
-													style={{
-														color: !item.read ? '#fefefe' : '#d2d7e6',
-														fontWeight: !item.read ? 600 : 500,
-														fontSize: '13px',
-														whiteSpace: 'nowrap',
-														overflow: 'hidden',
-														textOverflow: 'ellipsis',
-													}}
-												>
-													{item.subject}
-												</span>
-												<span
-													style={{
-														color: '#6c7389',
-														fontSize: '12px',
-														whiteSpace: 'nowrap',
-														overflow: 'hidden',
-														textOverflow: 'ellipsis',
-														flex: 1,
-													}}
-												>
-													— {item.snippet}
-												</span>
-											</div>
-
-											{/* Actions + meta */}
-											<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-												{item.tag && (
-													<Tag
-														color=""
+											{/* Content */}
+											<div style={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: 0 }}>
+												{/* Sender */}
+												<div style={{ width: 180, paddingRight: 16 }}>
+													<Text
+														strong={!item.read}
 														style={{
-															background: '#2a1f3f',
-															color: '#e2c7ff',
-															border: '1px solid #3e3158',
-															borderRadius: 999,
-															padding: '0 12px',
-															height: 22,
-															display: 'flex',
-															alignItems: 'center',
-															fontSize: '11px',
-															textTransform: 'capitalize',
-															margin: 0,
+															color: !item.read ? '#f7f9ff' : '#d6dae8',
+															fontSize: '13px',
+															whiteSpace: 'nowrap',
+															overflow: 'hidden',
+															textOverflow: 'ellipsis',
 														}}
 													>
+														{item.sender}
+													</Text>
+												</div>
+
+												{/* Subject + Snippet */}
+												<div style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+													<Text strong={!item.read} ellipsis style={{ color: !item.read ? '#fff' : '#b0b0b0', fontSize: 13, marginRight: 8 }}>
+														{item.subject}
+													</Text>
+													<Text ellipsis style={{ color: '#666', fontSize: 13, flex: 1 }}>
+														{item.snippet}
+													</Text>
+												</div>
+											</div>
+
+											{/* Right Actions */}
+											<div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 16 }}>
+												{item.tag && (
+													<Tag bordered={false} style={{ margin: 0, background: '#2b2640', color: '#a78bfa', fontSize: 11, borderRadius: 10 }}>
 														{item.tag}
 													</Tag>
 												)}
-												<div
-													style={{
-														display: 'flex',
-														alignItems: 'center',
-														gap: 10,
-														color: '#8b90a4',
-														opacity: isHovered ? 1 : 0,
-														transform: isHovered ? 'translateX(0)' : 'translateX(6px)',
-														transition: 'all 0.15s ease',
-													}}
-												>
-													<StarOutlined />
-													<DeleteOutlined />
-													<MailOutlined />
-													<ClockCircleOutlined />
-												</div>
-												<span style={{ width: 56, textAlign: 'right', color: '#80869d', fontSize: '12px' }}>
-													{item.time}
-												</span>
+
+												{/* Hover Actions (Absolute or Fixed Width to prevent jump) */}
+												{isHovered ? (
+													<div style={{ display: 'flex', gap: 12, color: '#888', minWidth: 60, justifyContent: 'flex-end' }}>
+														<DeleteOutlined />
+														<MailOutlined />
+														<ClockCircleOutlined />
+													</div>
+												) : (
+													<Text style={{ color: '#666', fontSize: 12, minWidth: 60, textAlign: 'right' }}>
+														{item.time}
+													</Text>
+												)}
 											</div>
 										</div>
 									);
@@ -314,7 +270,7 @@ const App = () => {
 					</div>
 				</div>
 
-				{/* --- RIGHT PANEL (PREVIEW PANE) --- */}
+				{/* --- RIGHT PANEL (Same as before) --- */}
 				{activeEmailId && activeEmail && (
 					<div style={{ flex: '1', display: 'flex', flexDirection: 'column', background: '#1f1f1f' }}>
 
@@ -381,7 +337,6 @@ const App = () => {
 						</div>
 					</div>
 				)}
-
 			</div>
 		</ConfigProvider>
 	);
