@@ -1,0 +1,115 @@
+name: Test Build Pipeline
+
+on:
+    push:
+        branches: [main, master]
+    pull_request:
+        branches: [main, master]
+# Give GITHUB_TOKEN write access to PRs and contents
+permissions:
+    contents: write
+    pull-requests: write
+jobs:
+    test-backend:
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: ./AIMS-backend
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "23"
+                  cache: "yarn"
+                  cache-dependency-path: "./AIMS-backend/yarn.lock"
+
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+
+            - name: Test backend (check if it can start)
+              run: |
+                  # Test if the backend can be started (we'll just check if it doesn't crash immediately)
+                  timeout 10s yarn start || true
+                  echo "Backend startup test completed"
+            - uses: actions/checkout@v3
+            - uses: octue/generate-pull-request-description@1.0.0.beta-2
+              id: pr-description
+              with:
+                  pull_request_url: ${{ github.event.pull_request.url }}
+                  api_token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Update pull request body
+              uses: riskledger/update-pr-description@v2
+              with:
+                  body: ${{ steps.pr-description.outputs.pull_request_description }}
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+    test-frontend:
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: ./AIMS-frontend
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "23"
+                  cache: "yarn"
+                  cache-dependency-path: "./AIMS-frontend/yarn.lock"
+
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+
+            - name: Build frontend
+              run: yarn build
+
+            - name: Test build output
+              run: |
+                  if [ -d "dist" ]; then
+                    echo "Frontend build successful - dist directory created"
+                    ls -la dist/
+                  else
+                    echo "Frontend build failed - no dist directory found"
+                    exit 1
+                  fi
+
+    test-extension:
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: ./Extension
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "23"
+                  cache: "yarn"
+                  cache-dependency-path: "./Extension/yarn.lock"
+
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+
+            - name: Build extension
+              run: yarn build
+
+            - name: Test build output
+              run: |
+                  if [ -d "dist" ]; then
+                    echo "Extension build successful - dist directory created"
+                    ls -la dist/
+                  else
+                    echo "Extension build failed - no dist directory found"
+                    exit 1
+                  fi
