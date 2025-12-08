@@ -1,135 +1,113 @@
 import React from 'react';
-import { Layout, Avatar } from 'antd';
 import {
-	Search,
-	Inbox,
-	Tag,
-	Calendar,
-	Plus,
-	Mail,
-	Send,
-	FileText,
-	AlertOctagon,
-	Trash2,
-	Settings,
-	HelpCircle,
-	PenSquare
-} from 'lucide-react';
+	EditOutlined,
+	SearchOutlined,
+	InboxOutlined,
+	TagsOutlined,
+	CalendarOutlined,
+	PlusOutlined,
+	MailOutlined,
+	SendOutlined,
+	FileOutlined,
+	ExclamationCircleOutlined,
+	DeleteOutlined,
+	SettingOutlined,
+	QuestionCircleOutlined,
+	AppstoreOutlined,
+	ContainerOutlined
+} from '@ant-design/icons';
+import { Menu, Input, Avatar, Typography, Button, ConfigProvider, theme } from 'antd';
 
-const { Sider } = Layout;
+const { Text } = Typography;
 
-const navSections = [
+const items = [
 	{
-		title: 'Views',
-		items: [
-			{ icon: Inbox, label: 'Inbox', badge: '54', active: true },
-			{ icon: Tag, label: 'Labels' },
-			{ icon: Calendar, label: 'Calendar' },
-		],
-		cta: { icon: Plus, label: 'Add view' }
-	},
-	{
-		title: 'Mail',
-		items: [
-			{ icon: Mail, label: 'All Mail' },
-			{ icon: Send, label: 'Sent' },
-			{ icon: FileText, label: 'Drafts' },
-			{ icon: AlertOctagon, label: 'Spam' },
-			{ icon: Trash2, label: 'Trash' },
+		type: 'group',
+		label: 'Mail',
+		children: [
+			{ key: 'all', label: 'All Mail', icon: <MailOutlined /> },
+			{ key: 'sent', label: 'Sent', icon: <SendOutlined /> },
+			{ key: 'drafts', label: 'Drafts', icon: <FileOutlined /> },
+			{ key: 'spam', label: 'Spam', icon: <ExclamationCircleOutlined /> },
+			{ key: 'trash', label: 'Trash', icon: <DeleteOutlined /> },
 		],
 	},
+	{
+		type: 'divider',
+	},
+	{ key: 'settings', label: 'Settings', icon: <SettingOutlined /> },
+	{ key: 'feedback', label: 'Send feedback', icon: <QuestionCircleOutlined /> },
 ];
 
-const NavItem = ({ icon, label, badge, active }) => {
-	const IconComponent = icon;
+const App = () => {
+	// Use Ant Design's Dark Algorithm for automatic dark mode styling
 	return (
-		<button
-			className={`group w-full flex items-center justify-between px-4 py-2 rounded-lg text-sm transition-all
-        ${active ? 'bg-[#1d1d1d] text-white shadow-[0_0_0_1px_#2c2c2c]' : 'text-[#9b9b9b] hover:bg-[#181818] hover:text-white'}
-      `}
+		<ConfigProvider
+			theme={{
+				algorithm: theme.darkAlgorithm,
+				token: {
+					colorPrimary: '#6b7280', // Adjust selection color (greyish)
+					colorBgContainer: '#1f1f1f',
+				},
+				components: {
+					Menu: {
+						itemSelectedBg: '#333333', // Dark grey background for selected item
+						itemSelectedColor: '#ffffff', // White text for selected item
+						itemHeight: 40,
+						itemMarginInline: 8, // Spacing for the rounded look
+					}
+				}
+			}}
 		>
-			<span className="flex items-center gap-3">
-				<IconComponent size={16} className={active ? 'text-white' : 'text-[#6a6a6a] group-hover:text-white'} />
-				{label}
-			</span>
-			{badge && <span className="text-xs text-[#6f6f6f]">{badge}</span>}
-		</button>
-	);
-};
-
-const SidebarIconButton = ({ icon, label }) => {
-	const IconComponent = icon;
-	return (
-		<button
-			className="p-2 rounded-md border border-[#2a2a2a] bg-[#141414] text-[#b1b1b1] hover:text-white hover:border-[#3a3a3a] transition"
-			aria-label={label}
-		>
-			<IconComponent size={14} />
-		</button>
-	);
-};
-
-const Sidebar = () => {
-	return (
-		<Sider
-			width={270}
-			className="border-r border-[#1b1b1b] h-full flex flex-col bg-[#101010]"
-		>
-			<div className="px-4 pt-4 pb-3 border-b border-[#1a1a1a]">
-				<div className="flex items-center justify-between">
-					<div className="flex items-center gap-3">
-						<Avatar
-							size={32}
-							src="https://api.dicebear.com/7.x/avataaars/svg?seed=Terry"
-							className="bg-purple-600"
-						/>
-						<div>
-							<p className="text-sm font-semibold text-white">Terry Huang</p>
-							<p className="text-[11px] text-[#7c7c7c]">Personal workspace</p>
-						</div>
+			<div
+				style={{
+					width: '100%',
+					height: '100vh',
+					background: '#141414', // Main background
+					display: 'flex',
+					flexDirection: 'column',
+					borderRight: '1px solid #303030',
+				}}
+			>
+				{/* --- 1. HEADER (User Profile) --- */}
+				<div style={{ padding: '12px 16px 12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+					<div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+						<Avatar src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" size="small" shape="square" />
+						<Text strong style={{ color: '#fff' }}>Terry Huang</Text>
+						<span style={{ fontSize: '10px', color: '#666' }}>▼</span>
 					</div>
-					<div className="flex gap-2">
-						<SidebarIconButton icon={PenSquare} label="Compose" />
-						<SidebarIconButton icon={Plus} label="New" />
+					<Button type="text" icon={<EditOutlined />} style={{ color: '#fff' }} />
+				</div>
+
+				{/* --- 2. SEARCH BAR --- */}
+				<div style={{ padding: '0 12px 16px 12px' }}>
+					<Input
+						placeholder="Search"
+						prefix={<SearchOutlined style={{ color: '#666' }} />}
+						bordered={false}
+						style={{ backgroundColor: 'transparent', color: '#fff' }}
+					/>
+				</div>
+
+				{/* --- 3. MENU (Scrollable Area) --- */}
+				<div style={{ flex: 1, overflowY: 'auto' }}>
+					<Menu
+						mode="inline"
+						defaultSelectedKeys={['all']} // Select "All Mail" by default
+						style={{ borderRight: 0, background: 'transparent' }}
+						items={items}
+					/>
+				</div>
+
+				{/* --- 4. FOOTER --- */}
+				<div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #303030' }}>
+					<div style={{ display: 'flex', gap: '16px' }}>
 					</div>
+					<QuestionCircleOutlined style={{ color: '#666', fontSize: '18px' }} />
 				</div>
 			</div>
-
-			<div className="px-4 py-4">
-				<button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-[#161616] border border-[#252525] text-[#9d9d9d] hover:border-[#3a3a3a] transition text-sm">
-					<Search size={14} />
-					<span>Search</span>
-				</button>
-			</div>
-
-			<div className="flex-1 overflow-y-auto custom-scrollbar px-3">
-				{navSections.map(section => {
-					const CtaIcon = section.cta?.icon;
-					return (
-						<div key={section.title} className="mb-6">
-							<div className="px-1 pb-2 text-[10px] uppercase tracking-[0.3em] text-[#5b5b5b]">{section.title}</div>
-							<div className="space-y-1">
-								{section.items.map(item => (
-									<NavItem key={item.label} {...item} />
-								))}
-							</div>
-							{section.cta && CtaIcon && (
-								<button className="mt-3 w-full flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-[#2a2a2a] text-xs font-semibold text-[#bdbdbd] hover:border-[#3a3a3a] hover:text-white transition">
-									<CtaIcon size={14} />
-									{section.cta.label}
-								</button>
-							)}
-						</div>
-					);
-				})}
-			</div>
-
-			<div className="px-3 pb-4 border-t border-[#1a1a1a] pt-3 space-y-1">
-				<NavItem icon={Settings} label="Settings" />
-				<NavItem icon={HelpCircle} label="Send feedback" />
-			</div>
-		</Sider>
+		</ConfigProvider>
 	);
 };
 
-export default Sidebar;
+export default App;
