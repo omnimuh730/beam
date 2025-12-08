@@ -1,21 +1,35 @@
 import React, { useState } from 'react';
-import { Popover, Checkbox, Button } from 'antd';
-import { Archive, Trash2, Clock } from 'lucide-react';
+import { Popover, Checkbox } from 'antd';
+import { Archive, Trash2, Clock, Star, MailCheck } from 'lucide-react';
 import AppTag from '../common/AppTag';
+
+const rowActions = [
+	{ id: 'star', icon: Star, label: 'Star' },
+	{ id: 'archive', icon: Archive, label: 'Archive' },
+	{ id: 'snooze', icon: Clock, label: 'Snooze' },
+	{ id: 'done', icon: MailCheck, label: 'Mark done' },
+	{ id: 'trash', icon: Trash2, label: 'Delete' },
+];
 
 const MailRow = ({ mail }) => {
 	const [hovered, setHovered] = useState(false);
-	const isSelected = mail.selected;
+	const isSelected = Boolean(mail.selected);
+	const showCheckbox = hovered || isSelected;
 
 	const popoverContent = (
-		<div className="w-[400px] p-0 text-sm bg-[#1e1e1e] text-[#d4d4d4] border border-[#333]">
-			<div className="p-3 font-semibold border-b border-[#333] flex justify-between">
-				<span>{mail.subject}</span>
-				<span className="text-xs text-gray-500">Just now</span>
+		<div className="w-[420px] text-sm bg-[#151515] text-[#d4d4d4] border border-[#2f2f2f] rounded-lg overflow-hidden shadow-2xl">
+			<div className="p-4 border-b border-[#222]">
+				<p className="text-xs uppercase tracking-[0.3em] text-[#666] mb-1">{mail.sender}</p>
+				<div className="flex items-center justify-between">
+					<p className="font-semibold text-white">{mail.subject}</p>
+					<span className="text-xs text-[#777]">{mail.time}</span>
+				</div>
 			</div>
-			<div className="p-3 text-gray-400 leading-relaxed">
+			<div className="p-4 text-[#9c9c9c] leading-relaxed">
 				{mail.preview}
-				<span className="bg-green-700 text-white px-1 ml-1 text-xs rounded">next</span>
+				<span className="bg-[#1f6131] text-[#d5fadf] px-2 py-0.5 ml-2 text-[11px] rounded-full uppercase tracking-widest">
+					next
+				</span>
 			</div>
 		</div>
 	);
@@ -23,45 +37,51 @@ const MailRow = ({ mail }) => {
 	return (
 		<Popover
 			content={popoverContent}
-			title={null}
-			trigger="hover"
 			placement="bottomLeft"
-			overlayInnerStyle={{ padding: 0, backgroundColor: '#1e1e1e', borderColor: '#333' }}
 			open={hovered && isSelected}
+			trigger="hover"
+			showArrow={false}
 		>
 			<div
-				className={`
-          group relative flex items-center gap-3 px-4 py-2 border-b border-[#262626] cursor-pointer text-sm
-          ${isSelected ? 'bg-[#2C2C2C]' : 'bg-[#191919] hover:bg-[#202020]'}
-          transition-colors duration-150
+				className={`group relative flex items-center gap-4 px-6 py-3 text-sm border-b border-[#1a1a1a] cursor-pointer transition-all
+          ${isSelected ? 'bg-[#181818] shadow-[inset_3px_0_0_0_#8e72ff]' : 'bg-transparent hover:bg-[#121212]'}
         `}
 				onMouseEnter={() => setHovered(true)}
 				onMouseLeave={() => setHovered(false)}
 			>
-				<div className={`w-5 flex items-center justify-center ${hovered || isSelected ? 'opacity-100' : 'opacity-0'}`}>
+				<div className={`w-6 flex items-center justify-center transition-opacity ${showCheckbox ? 'opacity-100' : 'opacity-0'}`}>
 					<Checkbox checked={isSelected} className="custom-checkbox" />
 				</div>
 
-				<div className="w-48 shrink-0 truncate text-[#E6E6E6] font-medium flex items-center gap-2">
-					{mail.sender}
-					{mail.count && <span className="text-xs text-gray-500 font-normal">{mail.count}</span>}
+				<div className="w-56 shrink-0 flex items-center gap-2 truncate text-[#f3f3f3] font-medium">
+					<span className="truncate">{mail.sender}</span>
+					{mail.count && <span className="text-xs text-[#6f6f6f] font-normal">{mail.count}</span>}
 				</div>
 
-				<div className="flex-1 truncate flex items-center gap-2 text-[#9B9B9B]">
-					<span className="text-[#D4D4D4]">{mail.subject}</span>
-					<span className="truncate opacity-60">{mail.preview}</span>
+				<div className="flex-1 flex items-center gap-2 min-w-0">
+					<span className={`truncate text-[#e6e6e6] ${mail.read ? 'font-medium' : 'font-semibold'}`}>
+						{mail.subject}
+					</span>
+					<span className="truncate text-[#6f6f6f]">— {mail.preview}</span>
 				</div>
 
 				<div className="flex items-center gap-3 shrink-0">
-					{hovered && (
-						<div className="flex items-center gap-1 text-gray-400 bg-[#202020] shadow-[-10px_0_10px_-5px_#202020]">
-							<Button type="text" size="small" icon={<Archive size={15} />} />
-							<Button type="text" size="small" icon={<Trash2 size={15} />} />
-							<Button type="text" size="small" icon={<Clock size={15} />} />
-						</div>
-					)}
+					<div className={`flex items-center gap-1 transition-all duration-200 ${hovered ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2 pointer-events-none'}`}>
+						{rowActions.map(action => {
+							const ActionIcon = action.icon;
+							return (
+								<button
+									key={action.id}
+									className="p-1.5 rounded-md text-[#8a8a8a] hover:text-white hover:bg-[#1f1f1f] transition"
+									aria-label={action.label}
+								>
+									<ActionIcon size={15} />
+								</button>
+							);
+						})}
+					</div>
 					<AppTag label={mail.tag} color={mail.tagColor} />
-					<span className="text-xs text-[#666] w-16 text-right whitespace-nowrap">
+					<span className="text-xs text-[#6f6f6f] w-16 text-right whitespace-nowrap">
 						{mail.time}
 					</span>
 				</div>

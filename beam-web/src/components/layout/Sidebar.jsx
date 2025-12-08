@@ -1,73 +1,130 @@
 import React from 'react';
 import { Layout, Avatar } from 'antd';
 import {
-	Search, Inbox, Tag, Calendar, Plus, Mail, Send, File,
-	AlertOctagon, Trash2, Settings, HelpCircle, Pencil
+	Search,
+	Inbox,
+	Tag,
+	Calendar,
+	Plus,
+	Mail,
+	Send,
+	FileText,
+	AlertOctagon,
+	Trash2,
+	Settings,
+	HelpCircle,
+	PenSquare
 } from 'lucide-react';
 
 const { Sider } = Layout;
 
-const NavItem = ({ icon: Icon, label, active, count }) => (
-	<div
-		className={`
-      flex items-center justify-between px-3 py-1.5 mx-2 rounded-md cursor-pointer group transition-all
-      ${active ? 'bg-[#2C2C2C] text-white' : 'text-[#9B9B9B] hover:bg-[#252525] hover:text-[#D3D3D3]'}
-    `}
-	>
-		<div className="flex items-center gap-2.5 text-sm font-medium">
-			<Icon size={16} strokeWidth={2} />
-			<span>{label}</span>
-		</div>
-		{count && <span className="text-xs opacity-60">{count}</span>}
-	</div>
-);
+const navSections = [
+	{
+		title: 'Views',
+		items: [
+			{ icon: Inbox, label: 'Inbox', badge: '54', active: true },
+			{ icon: Tag, label: 'Labels' },
+			{ icon: Calendar, label: 'Calendar' },
+		],
+		cta: { icon: Plus, label: 'Add view' }
+	},
+	{
+		title: 'Mail',
+		items: [
+			{ icon: Mail, label: 'All Mail' },
+			{ icon: Send, label: 'Sent' },
+			{ icon: FileText, label: 'Drafts' },
+			{ icon: AlertOctagon, label: 'Spam' },
+			{ icon: Trash2, label: 'Trash' },
+		],
+	},
+];
+
+const NavItem = ({ icon, label, badge, active }) => {
+	const IconComponent = icon;
+	return (
+		<button
+			className={`group w-full flex items-center justify-between px-4 py-2 rounded-lg text-sm transition-all
+        ${active ? 'bg-[#1d1d1d] text-white shadow-[0_0_0_1px_#2c2c2c]' : 'text-[#9b9b9b] hover:bg-[#181818] hover:text-white'}
+      `}
+		>
+			<span className="flex items-center gap-3">
+				<IconComponent size={16} className={active ? 'text-white' : 'text-[#6a6a6a] group-hover:text-white'} />
+				{label}
+			</span>
+			{badge && <span className="text-xs text-[#6f6f6f]">{badge}</span>}
+		</button>
+	);
+};
+
+const SidebarIconButton = ({ icon, label }) => {
+	const IconComponent = icon;
+	return (
+		<button
+			className="p-2 rounded-md border border-[#2a2a2a] bg-[#141414] text-[#b1b1b1] hover:text-white hover:border-[#3a3a3a] transition"
+			aria-label={label}
+		>
+			<IconComponent size={14} />
+		</button>
+	);
+};
 
 const Sidebar = () => {
 	return (
 		<Sider
-			width={240}
-			className="border-r border-[#262626] h-full flex flex-col pt-3 pb-3"
-			style={{ backgroundColor: '#191919' }}
+			width={270}
+			className="border-r border-[#1b1b1b] h-full flex flex-col bg-[#101010]"
 		>
-			{/* User Profile */}
-			<div className="px-4 mb-4 flex items-center justify-between cursor-pointer">
-				<div className="flex items-center gap-2">
-					<Avatar size="small" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Terry" className="bg-purple-600" />
-					<span className="font-medium text-sm text-[#E6E6E6]">Terry Huang</span>
+			<div className="px-4 pt-4 pb-3 border-b border-[#1a1a1a]">
+				<div className="flex items-center justify-between">
+					<div className="flex items-center gap-3">
+						<Avatar
+							size={32}
+							src="https://api.dicebear.com/7.x/avataaars/svg?seed=Terry"
+							className="bg-purple-600"
+						/>
+						<div>
+							<p className="text-sm font-semibold text-white">Terry Huang</p>
+							<p className="text-[11px] text-[#7c7c7c]">Personal workspace</p>
+						</div>
+					</div>
+					<div className="flex gap-2">
+						<SidebarIconButton icon={PenSquare} label="Compose" />
+						<SidebarIconButton icon={Plus} label="New" />
+					</div>
 				</div>
-				<Pencil size={14} className="text-gray-500" />
 			</div>
 
-			{/* Search Bar */}
-			<div className="px-3 mb-2">
-				<div className="flex items-center gap-2 bg-[#262626] px-2 py-1.5 rounded-md text-gray-500 hover:bg-[#2f2f2f] cursor-text transition-colors border border-transparent hover:border-[#444]">
+			<div className="px-4 py-4">
+				<button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-[#161616] border border-[#252525] text-[#9d9d9d] hover:border-[#3a3a3a] transition text-sm">
 					<Search size={14} />
-					<span className="text-sm">Search</span>
-				</div>
+					<span>Search</span>
+				</button>
 			</div>
 
-			{/* Navigation Links */}
-			<div className="flex-1 overflow-y-auto custom-scrollbar">
-				<div className="mb-4">
-					<div className="px-4 py-1 text-[11px] font-semibold text-[#666]">Views</div>
-					<NavItem icon={Inbox} label="Inbox" active count={12} />
-					<NavItem icon={Tag} label="Labels" />
-					<NavItem icon={Calendar} label="Calendar" />
-					<NavItem icon={Plus} label="Add view" />
-				</div>
-
-				<div className="mb-4">
-					<div className="px-4 py-1 text-[11px] font-semibold text-[#666]">Mail</div>
-					<NavItem icon={Mail} label="All Mail" />
-					<NavItem icon={Send} label="Sent" />
-					<NavItem icon={File} label="Drafts" />
-					<NavItem icon={AlertOctagon} label="Spam" />
-					<NavItem icon={Trash2} label="Trash" />
-				</div>
+			<div className="flex-1 overflow-y-auto custom-scrollbar px-3">
+				{navSections.map(section => {
+					const CtaIcon = section.cta?.icon;
+					return (
+						<div key={section.title} className="mb-6">
+							<div className="px-1 pb-2 text-[10px] uppercase tracking-[0.3em] text-[#5b5b5b]">{section.title}</div>
+							<div className="space-y-1">
+								{section.items.map(item => (
+									<NavItem key={item.label} {...item} />
+								))}
+							</div>
+							{section.cta && CtaIcon && (
+								<button className="mt-3 w-full flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-[#2a2a2a] text-xs font-semibold text-[#bdbdbd] hover:border-[#3a3a3a] hover:text-white transition">
+									<CtaIcon size={14} />
+									{section.cta.label}
+								</button>
+							)}
+						</div>
+					);
+				})}
 			</div>
 
-			{/* Footer Settings */}
-			<div className="mt-auto pt-2">
+			<div className="px-3 pb-4 border-t border-[#1a1a1a] pt-3 space-y-1">
 				<NavItem icon={Settings} label="Settings" />
 				<NavItem icon={HelpCircle} label="Send feedback" />
 			</div>
