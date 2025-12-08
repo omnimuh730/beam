@@ -10,12 +10,11 @@ import {
 	ReloadOutlined,
 	ArrowLeftOutlined,
 	PrinterOutlined,
-	CheckSquareOutlined,
 	ClockCircleOutlined,
 	FolderOpenOutlined,
 	TagOutlined
 } from '@ant-design/icons';
-import { Avatar, Typography, Tag, ConfigProvider, theme, Checkbox, Button, Tooltip, Badge } from 'antd';
+import { Avatar, Typography, Tag, ConfigProvider, theme, Checkbox, Tooltip } from 'antd';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -177,7 +176,7 @@ const App = () => {
 						{Object.keys(groupedData).map(group => (
 							<div key={group}>
 								{/* Group Label */}
-								<div style={{ padding: '12px 16px 4px', fontSize: '12px', color: '#8c8c8c', fontWeight: 600 }}>
+								<div style={{ fontSize: '11px', color: '#656c82', letterSpacing: '0.35em', textTransform: 'uppercase' }}>
 									{group}
 								</div>
 
@@ -195,52 +194,117 @@ const App = () => {
 											onClick={() => setActiveEmailId(item.id)}
 											style={{
 												display: 'flex',
-												padding: '10px 16px',
+												alignItems: 'center',
+												padding: '0px 28px',
 												cursor: 'pointer',
-												background: isSelected ? '#111b26' : (isActive ? '#262626' : 'transparent'),
-												borderLeft: isSelected ? '3px solid #177ddc' : '3px solid transparent',
-												borderBottom: '1px solid #1f1f1f',
-												alignItems: 'center'
+												background: isSelected ? '#191c26' : isHovered ? '#151822' : (isActive ? '#161922' : 'transparent'),
+												borderBottom: '1px solid #181a23',
+												borderLeft: isSelected ? '3px solid #8a83ff' : '3px solid transparent',
+												borderRadius: isSelected || isHovered ? 10 : 0,
+												maxHeight: 40,
+												transition: 'all 0.18s ease',
 											}}
 										>
 											{/* Checkbox / Hover Area */}
-											<div style={{ width: '30px', display: 'flex', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+											<div
+												style={{ width: 28, display: 'flex', justifyContent: 'center' }}
+												onClick={(e) => e.stopPropagation()}
+											>
 												{(isHovered || isSelected) ? (
-													<Checkbox checked={isSelected} onChange={(e) => toggleSelection(item.id, e)} />
+													<Checkbox
+														checked={isSelected}
+														onChange={(e) => toggleSelection(item.id, e)}
+													/>
 												) : (
-													// Placeholder to keep spacing alignment when checkbox is hidden
-													<div style={{ width: 16 }} />
+													<div style={{ width: 16, height: 16 }} />
 												)}
 											</div>
 
-											{/* Content */}
-											<div style={{ flex: 1, overflow: 'hidden' }}>
-												<div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-													<Text strong={!item.read} style={{ color: !item.read ? '#fff' : '#d9d9d9' }}>{item.sender}</Text>
+											{/* Sender */}
+											<div style={{ width: 190, display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+												<Text
+													strong={!item.read}
+													style={{
+														color: !item.read ? '#f7f9ff' : '#d6dae8',
+														fontSize: '13px',
+														whiteSpace: 'nowrap',
+														overflow: 'hidden',
+														textOverflow: 'ellipsis',
+													}}
+												>
+													{item.sender}
+												</Text>
+											</div>
 
-													{/* Actions on Hover OR Time */}
-													{isHovered ? (
-														<div style={{ display: 'flex', gap: '12px', color: '#8c8c8c' }}>
-															<StarOutlined />
-															<DeleteOutlined />
-															<MailOutlined />
-															<ClockCircleOutlined />
-														</div>
-													) : (
-														<Text type="secondary" style={{ fontSize: '12px' }}>{item.time}</Text>
-													)}
-												</div>
+											{/* Subject + snippet */}
+											<div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+												<span
+													style={{
+														color: !item.read ? '#fefefe' : '#d2d7e6',
+														fontWeight: !item.read ? 600 : 500,
+														fontSize: '13px',
+														whiteSpace: 'nowrap',
+														overflow: 'hidden',
+														textOverflow: 'ellipsis',
+													}}
+												>
+													{item.subject}
+												</span>
+												<span
+													style={{
+														color: '#6c7389',
+														fontSize: '12px',
+														whiteSpace: 'nowrap',
+														overflow: 'hidden',
+														textOverflow: 'ellipsis',
+														flex: 1,
+													}}
+												>
+													— {item.snippet}
+												</span>
+											</div>
 
-												<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-													<Text ellipsis style={{ color: !item.read ? '#e6f7ff' : '#8c8c8c', flex: 1 }}>
-														{item.subject} <span style={{ color: '#595959' }}>- {item.snippet}</span>
-													</Text>
-													{item.tag && (
-														<Tag color="purple" style={{ margin: 0, border: 0, color: '#fff' }}>
-															{item.tag}
-														</Tag>
-													)}
+											{/* Actions + meta */}
+											<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+												{item.tag && (
+													<Tag
+														color=""
+														style={{
+															background: '#2a1f3f',
+															color: '#e2c7ff',
+															border: '1px solid #3e3158',
+															borderRadius: 999,
+															padding: '0 12px',
+															height: 22,
+															display: 'flex',
+															alignItems: 'center',
+															fontSize: '11px',
+															textTransform: 'capitalize',
+															margin: 0,
+														}}
+													>
+														{item.tag}
+													</Tag>
+												)}
+												<div
+													style={{
+														display: 'flex',
+														alignItems: 'center',
+														gap: 10,
+														color: '#8b90a4',
+														opacity: isHovered ? 1 : 0,
+														transform: isHovered ? 'translateX(0)' : 'translateX(6px)',
+														transition: 'all 0.15s ease',
+													}}
+												>
+													<StarOutlined />
+													<DeleteOutlined />
+													<MailOutlined />
+													<ClockCircleOutlined />
 												</div>
+												<span style={{ width: 56, textAlign: 'right', color: '#80869d', fontSize: '12px' }}>
+													{item.time}
+												</span>
 											</div>
 										</div>
 									);

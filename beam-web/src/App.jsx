@@ -4,14 +4,7 @@ import { Flex, Layout } from 'antd';
 import SideBar from './components/layout/Sidebar.jsx';
 import MailRow from './components/mail/MailRow.jsx';
 
-const { Header, Sider, Content } = Layout;
-const headerStyle = {
-	textAlign: 'center',
-	color: '#fff',
-	height: 64,
-	paddingInline: 48,
-	lineHeight: '64px',
-};
+const { Sider, Content } = Layout;
 const contentStyle = {
 	textAlign: 'center',
 	height: '100%',
@@ -37,7 +30,6 @@ const App = () => (
 				<SideBar />
 			</Sider>
 			<Layout>
-				<Header style={headerStyle}>Header</Header>
 				<Content style={contentStyle}>
 					<MailRow />
 				</Content>

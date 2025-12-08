@@ -84,7 +84,7 @@ const App = () => {
 					<Input
 						placeholder="Search"
 						prefix={<SearchOutlined style={{ color: '#666' }} />}
-						bordered={false}
+						bordered={true}
 						style={{ backgroundColor: 'transparent', color: '#fff' }}
 					/>
 				</div>
@@ -103,7 +103,7 @@ const App = () => {
 				<div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #303030' }}>
 					<div style={{ display: 'flex', gap: '16px' }}>
 					</div>
-					<QuestionCircleOutlined style={{ color: '#666', fontSize: '18px' }} />
+					<Button type="primary" shape="circle" icon={<QuestionCircleOutlined />} />
 				</div>
 			</div>
 		</ConfigProvider>
