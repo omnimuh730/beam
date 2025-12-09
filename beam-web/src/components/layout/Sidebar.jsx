@@ -42,7 +42,6 @@ const items = [
 
 const Sidebar = ({ user, loadingUser, onLogin, onLogout }) => {
 	const isAuthenticated = Boolean(user);
-	const profileAccent = 'rgba(138, 131, 255, 0.3)';
 
 	const handleAuthClick = () => {
 		if (isAuthenticated) {
@@ -84,9 +83,9 @@ const Sidebar = ({ user, loadingUser, onLogin, onLogout }) => {
 				{/* --- 1. HEADER (User Profile) --- */}
 				<div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
 					<div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flex: 1 }}>
+						{console.log(user)}
 						<Avatar
 							src={user?.photo || defaultAvatar}
-							size="small"
 							shape="square"
 						/>
 						<div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -96,8 +95,6 @@ const Sidebar = ({ user, loadingUser, onLogin, onLogout }) => {
 									color: '#fff',
 									padding: '2px 8px',
 									borderRadius: 999,
-									background: isAuthenticated ? profileAccent : 'transparent',
-									boxShadow: isAuthenticated ? '0 0 10px rgba(138, 131, 255, 0.7)' : 'none',
 								}}
 							>
 								{user?.displayName || 'Guest'}
@@ -107,17 +104,20 @@ const Sidebar = ({ user, loadingUser, onLogin, onLogout }) => {
 							</Text>
 						</div>
 					</div>
-					<div style={{ display: 'flex', gap: 8 }}>
-						<Button
-							type={isAuthenticated ? 'default' : 'primary'}
-							size="small"
-							loading={!isAuthenticated && loadingUser}
-							onClick={handleAuthClick}
-						>
-							{isAuthenticated ? 'Logout' : 'Sign in'}
-						</Button>
-						<Button type="text" icon={<EditOutlined />} style={{ color: '#fff' }} />
-					</div>
+					{
+						!isAuthenticated &&
+						<div style={{ display: 'flex', gap: 8 }}>
+							<Button
+								type={isAuthenticated ? 'default' : 'primary'}
+								size="small"
+								loading={!isAuthenticated && loadingUser}
+								onClick={handleAuthClick}
+							>
+								'Sign in'
+							</Button>
+							<Button type="text" icon={<EditOutlined />} style={{ color: '#fff' }} />
+						</div>
+					}
 				</div>
 
 				{/* --- 2. SEARCH BAR --- */}
