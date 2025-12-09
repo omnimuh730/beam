@@ -1,53 +1,161 @@
-// index.ts
 import express from "express";
-// import { connectDB } from './db.js'; // You would uncomment this when setting up MongoDB
+import session from "express-session";
+import passport from "passport";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import cors from "cors";
+import { readFileSync } from "node:fs";
 import "dotenv/config";
-// import { google } from 'googleapis'; // Uncomment when implementing Gmail API logic
+
+declare global {
+	namespace Express {
+		interface User {
+			id: string;
+			displayName: string;
+			email?: string;
+			photo?: string;
+		}
+	}
+}
+
+type GoogleCredentials = {
+	web: {
+		client_id: string;
+		client_secret: string;
+		redirect_uris?: string[];
+		javascript_origins?: string[];
+	};
+};
+
+const credentials = JSON.parse(
+	readFileSync(new URL("./client_secret.json", import.meta.url), "utf-8"),
+) as GoogleCredentials;
+
+const CLIENT_URL =
+	process.env.CLIENT_URL ||
+	credentials.web.javascript_origins?.[0] ||
+	"http://localhost:6173";
+const GOOGLE_CALLBACK_URL =
+	process.env.GOOGLE_CALLBACK_URL ||
+	credentials.web.redirect_uris?.[0] ||
+	`${CLIENT_URL}/api/auth/callback/google`;
+const SESSION_SECRET = process.env.SESSION_SECRET || "beam-dev-secret";
+const PORT = Number(process.env.PORT) || 4000;
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// Middleware
+app.set("trust proxy", 1);
+app.use(
+	cors({
+		origin: CLIENT_URL,
+		credentials: true,
+	}),
+);
 app.use(express.json());
+app.use(
+	session({
+		secret: SESSION_SECRET,
+		resave: false,
+		saveUninitialized: false,
+		cookie: {
+			httpOnly: true,
+			sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+			secure: process.env.NODE_ENV === "production",
+		},
+	}),
+);
+app.use(passport.initialize());
+app.use(passport.session());
 
-// 1. (Future) Connect to MongoDB:
-// connectDB();
-
-// 2. Base Route
-app.get("/", (req, res) => {
-	res.send("Welcome to the Beam Backend. Ready to serve Gmail data.");
+passport.serializeUser((user, done) => {
+	done(null, user);
 });
 
-// 3. Gmail API Route (Placeholder)
-app.get("/api/gmail/latest", async (req, res) => {
-	try {
-		// --- AUTHENTICATION AND API CALL LOGIC GOES HERE ---
+passport.deserializeUser((user: Express.User, done) => {
+	done(null, user);
+});
 
-		// **Simplified Placeholder Logic:**
-		// You would typically:
-		// 1. Get an existing OAuth token for the user from your MongoDB.
-		// 2. Set up the OAuth2 client and the Gmail API client.
-		// 3. Call gmail.users.messages.list({ userId: 'me', maxResults: 5 });
+passport.use(
+	new GoogleStrategy(
+		{
+			clientID: credentials.web.client_id,
+			clientSecret: credentials.web.client_secret,
+			callbackURL: GOOGLE_CALLBACK_URL,
+		},
+		(_accessToken, _refreshToken, profile, done) => {
+			const user: Express.User = {
+				id: profile.id,
+				displayName: profile.displayName,
+				email: profile.emails?.[0]?.value,
+				photo: profile.photos?.[0]?.value,
+			};
 
-		const placeholderData = {
-			status: "Success",
-			message: "This endpoint will soon serve data from the Gmail API!",
-			instructions: "Implement OAuth2 flow and use googleapis library.",
-		};
+			done(null, user);
+		},
+	),
+);
 
-		res.json(placeholderData);
-	} catch (error) {
-		console.error("Error fetching Gmail data:", error);
-		res.status(500).json({
-			error: "Failed to retrieve data from Gmail API.",
+app.get("/api/health", (_req, res) => {
+	res.json({ ok: true });
+});
+
+app.get(
+	"/api/auth/google",
+	passport.authenticate("google", {
+		scope: ["profile", "email"],
+		prompt: "select_account",
+		session: true,
+	}),
+);
+
+app.get(
+	"/api/auth/callback/google",
+	passport.authenticate("google", {
+		failureRedirect: `${CLIENT_URL}?auth=failed`,
+		session: true,
+	}),
+	(_req, res) => {
+		res.redirect(`${CLIENT_URL}?auth=success`);
+	},
+);
+
+app.get("/api/auth/me", (req, res) => {
+	if (req.isAuthenticated()) {
+		res.json({
+			authenticated: true,
+			user: req.user,
 		});
+		return;
 	}
+
+	res.status(401).json({
+		authenticated: false,
+		user: null,
+	});
 });
 
-// Start the server
+app.post("/api/auth/logout", (req, res, next) => {
+	req.logout(err => {
+		if (err) {
+			return next(err);
+		}
+
+		req.session.destroy(sessionErr => {
+			if (sessionErr) {
+				return next(sessionErr);
+			}
+
+			res.clearCookie("connect.sid");
+			res.json({ success: true });
+		});
+	});
+});
+
+app.use((_req, res) => {
+	res.status(404).json({
+		error: "Not found",
+	});
+});
+
 app.listen(PORT, () => {
-	console.log(`🚀 Bun Server running on http://localhost:${PORT}`);
-	console.log('Use "bun run dev" for watch mode.');
+	console.log(`Beam backend listening on http://localhost:${PORT}`);
 });
-
-// To run this: bun run dev

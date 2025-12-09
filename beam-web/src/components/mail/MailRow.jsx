@@ -73,7 +73,7 @@ const initialData = [
 	},
 ];
 
-const App = () => {
+const MailRow = ({ user }) => {
 	const [selectedIds, setSelectedIds] = useState([]);
 	const [activeEmailId, setActiveEmailId] = useState(null);
 	const [hoveredId, setHoveredId] = useState(null);
@@ -154,6 +154,21 @@ const App = () => {
 								<div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
 									<AppstoreOutlined style={{ fontSize: '16px' }} />
 									<Title level={5} style={{ margin: 0 }}>All Mail</Title>
+									{user && (
+										<span style={{
+											padding: '0 10px',
+											height: 22,
+											display: 'inline-flex',
+											alignItems: 'center',
+											fontSize: 12,
+											borderRadius: 999,
+											background: 'rgba(138, 131, 255, 0.2)',
+											color: '#c7c2ff',
+											boxShadow: '0 0 6px rgba(138, 131, 255, 0.6)'
+										}}>
+											{user.displayName}
+										</span>
+									)}
 								</div>
 								<div style={{ display: 'flex', gap: '16px', color: '#a0a0a0' }}>
 									<Tag style={{ background: '#262626', border: '1px solid #434343' }}>
@@ -342,4 +357,4 @@ const App = () => {
 	);
 };
 
-export default App;
+export default MailRow;

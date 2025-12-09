@@ -19,6 +19,7 @@ import {
 import { Menu, Input, Avatar, Typography, Button, ConfigProvider, theme } from 'antd';
 
 const { Text } = Typography;
+const defaultAvatar = 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix';
 
 const items = [
 	{
@@ -39,7 +40,18 @@ const items = [
 	{ key: 'feedback', label: 'Send feedback', icon: <QuestionCircleOutlined /> },
 ];
 
-const App = () => {
+const Sidebar = ({ user, loadingUser, onLogin, onLogout }) => {
+	const isAuthenticated = Boolean(user);
+	const profileAccent = 'rgba(138, 131, 255, 0.3)';
+
+	const handleAuthClick = () => {
+		if (isAuthenticated) {
+			onLogout?.();
+		} else {
+			onLogin?.();
+		}
+	};
+
 	// Use Ant Design's Dark Algorithm for automatic dark mode styling
 	return (
 		<ConfigProvider
@@ -70,13 +82,42 @@ const App = () => {
 				}}
 			>
 				{/* --- 1. HEADER (User Profile) --- */}
-				<div style={{ padding: '12px 16px 12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-					<div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-						<Avatar src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" size="small" shape="square" />
-						<Text strong style={{ color: '#fff' }}>Terry Huang</Text>
-						<span style={{ fontSize: '10px', color: '#666' }}>▼</span>
+				<div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+					<div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flex: 1 }}>
+						<Avatar
+							src={user?.photo || defaultAvatar}
+							size="small"
+							shape="square"
+						/>
+						<div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+							<Text
+								strong
+								style={{
+									color: '#fff',
+									padding: '2px 8px',
+									borderRadius: 999,
+									background: isAuthenticated ? profileAccent : 'transparent',
+									boxShadow: isAuthenticated ? '0 0 10px rgba(138, 131, 255, 0.7)' : 'none',
+								}}
+							>
+								{user?.displayName || 'Guest'}
+							</Text>
+							<Text style={{ color: '#8c8c8c', fontSize: 11 }}>
+								{user?.email || 'Sign in to link Gmail'}
+							</Text>
+						</div>
 					</div>
-					<Button type="text" icon={<EditOutlined />} style={{ color: '#fff' }} />
+					<div style={{ display: 'flex', gap: 8 }}>
+						<Button
+							type={isAuthenticated ? 'default' : 'primary'}
+							size="small"
+							loading={!isAuthenticated && loadingUser}
+							onClick={handleAuthClick}
+						>
+							{isAuthenticated ? 'Logout' : 'Sign in'}
+						</Button>
+						<Button type="text" icon={<EditOutlined />} style={{ color: '#fff' }} />
+					</div>
 				</div>
 
 				{/* --- 2. SEARCH BAR --- */}
@@ -110,4 +151,4 @@ const App = () => {
 	);
 };
 
-export default App;
+export default Sidebar;
