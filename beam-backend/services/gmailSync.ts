@@ -31,8 +31,23 @@ const RATE_LIMIT_DELAY_MS = Number(
 	process.env.GMAIL_RATE_LIMIT_MS ?? "200",
 );
 
-const MAX_FULL_SYNC_MESSAGES = Number(
-	process.env.GMAIL_FULL_SYNC_LIMIT ?? "100",
+const resolveFullSyncLimit = () => {
+	const raw = process.env.GMAIL_FULL_SYNC_LIMIT ?? "2000";
+	if (typeof raw === "string" && raw.toLowerCase() === "all") {
+		return Number.POSITIVE_INFINITY;
+	}
+	const parsed = Number(raw);
+	if (Number.isFinite(parsed) && parsed > 0) {
+		return parsed;
+	}
+	return 2000;
+};
+
+const FULL_SYNC_MAX_MESSAGES = resolveFullSyncLimit();
+
+const FULL_SYNC_BATCH_SIZE = Math.min(
+	500,
+	Math.max(25, Number(process.env.GMAIL_FULL_SYNC_BATCH ?? "250") || 250),
 );
 
 const delay = (ms: number) =>
@@ -290,29 +305,74 @@ const performFullSync = async (user: UserWithTokens) => {
 
 	await upsertLabels(user, labelResponse.labels ?? []);
 
-	const listResponse = await gmailRequest<GmailApiMessageList>(
-		user,
-		"messages",
-		{
-			maxResults: MAX_FULL_SYNC_MESSAGES,
-			labelIds: "INBOX",
-		},
-	);
-
-	const messages = listResponse.messages ?? [];
+	let pageToken: string | undefined;
+	let fetched = 0;
 	const summary = { upserted: 0, deleted: 0 };
 
-	for (const messageMeta of messages) {
-		await delay(RATE_LIMIT_DELAY_MS);
-		const message = await gmailRequest<GmailApiMessage>(
+	const shouldContinue = () =>
+		Number.isFinite(FULL_SYNC_MAX_MESSAGES)
+			? fetched < FULL_SYNC_MAX_MESSAGES
+			: true;
+
+	while (shouldContinue()) {
+		const maxResults = Number.isFinite(FULL_SYNC_MAX_MESSAGES)
+			? Math.min(
+					FULL_SYNC_BATCH_SIZE,
+					Math.max(0, FULL_SYNC_MAX_MESSAGES - fetched),
+			  )
+			: FULL_SYNC_BATCH_SIZE;
+
+		if (maxResults <= 0) {
+			break;
+		}
+
+		const listResponse = await gmailRequest<GmailApiMessageList>(
 			user,
-			`messages/${messageMeta.id}`,
+			"messages",
 			{
-				format: "full",
+				maxResults,
+				labelIds: "INBOX",
+				pageToken,
 			},
 		);
-		await upsertMessage(user, message, { replaceBody: true });
-		summary.upserted += 1;
+
+		const messages = listResponse.messages ?? [];
+		if (!messages.length) {
+			break;
+		}
+
+		for (const messageMeta of messages) {
+			await delay(RATE_LIMIT_DELAY_MS);
+			const message = await gmailRequest<GmailApiMessage>(
+				user,
+				`messages/${messageMeta.id}`,
+				{
+					format: "full",
+				},
+			);
+			await upsertMessage(user, message, { replaceBody: true });
+			summary.upserted += 1;
+			fetched += 1;
+
+			if (
+				Number.isFinite(FULL_SYNC_MAX_MESSAGES) &&
+				fetched >= FULL_SYNC_MAX_MESSAGES
+			) {
+				break;
+			}
+		}
+
+		if (
+			Number.isFinite(FULL_SYNC_MAX_MESSAGES) &&
+			fetched >= FULL_SYNC_MAX_MESSAGES
+		) {
+			break;
+		}
+
+		pageToken = listResponse.nextPageToken;
+		if (!pageToken) {
+			break;
+		}
 	}
 
 	user.lastHistoryId = profile.historyId;
@@ -532,3 +592,36 @@ export const listStoredMessages = async (
 
 export const listStoredLabels = (userId: string) =>
 	GmailLabelModel.find({ user: userId }).sort({ name: 1 }).lean();
+
+export const getMessageWithBody = async (userId: string, gmailId: string) => {
+	let message = await GmailMessageModel.findOne({
+		user: userId,
+		gmailId,
+	}).lean();
+
+	if (message && (message.plainBody || message.htmlBody)) {
+		return message;
+	}
+
+	const user = await loadUserWithTokens(userId);
+	if (!user) {
+		throw new Error("Unable to load user for Gmail fetch");
+	}
+
+	const remoteMessage = await gmailRequest<GmailApiMessage>(
+		user,
+		`messages/${gmailId}`,
+		{
+			format: "full",
+		},
+	);
+
+	await upsertMessage(user, remoteMessage, { replaceBody: true });
+
+	message = await GmailMessageModel.findOne({
+		user: user._id,
+		gmailId,
+	}).lean();
+
+	return message;
+};

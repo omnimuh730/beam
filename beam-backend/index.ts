@@ -12,6 +12,7 @@ import {
 	listStoredLabels,
 	listStoredMessages,
 	syncMailboxForUser,
+	getMessageWithBody,
 } from "./services/gmailSync";
 
 declare global {
@@ -61,6 +62,32 @@ const ensureAuthenticated: RequestHandler = (req, res, next) => {
 	}
 	res.status(401).json({ error: "Not authenticated" });
 };
+
+const serializeMessage = (message: {
+	gmailId: string;
+	threadId: string;
+	historyId?: string;
+	labelIds?: string[];
+	subject?: string;
+	snippet?: string;
+	from?: string;
+	to?: string;
+	internalDate?: Date;
+	plainBody?: string;
+	htmlBody?: string;
+}) => ({
+	id: message.gmailId,
+	threadId: message.threadId,
+	historyId: message.historyId,
+	labelIds: message.labelIds,
+	subject: message.subject,
+	snippet: message.snippet,
+	from: message.from,
+	to: message.to,
+	internalDate: message.internalDate?.toISOString(),
+	plainBody: message.plainBody,
+	htmlBody: message.htmlBody,
+});
 
 const app = express();
 
@@ -254,25 +281,29 @@ app.get("/api/gmail/messages", ensureAuthenticated, async (req, res, next) => {
 			offset,
 			labelId,
 		});
-		const payload = messages.map(message => ({
-			id: message.gmailId,
-			threadId: message.threadId,
-			historyId: message.historyId,
-			labelIds: message.labelIds,
-			subject: message.subject,
-			snippet: message.snippet,
-			from: message.from,
-			to: message.to,
-			internalDate: message.internalDate?.toISOString(),
-			plainBody: message.plainBody,
-			htmlBody: message.htmlBody,
-		}));
-
+		const payload = messages.map(serializeMessage);
 		res.json({ messages: payload, total, page, limit });
 	} catch (error) {
 		next(error);
 	}
 });
+
+app.get(
+	"/api/gmail/messages/:id",
+	ensureAuthenticated,
+	async (req, res, next) => {
+		try {
+			const message = await getMessageWithBody(req.user.id, req.params.id);
+			if (!message) {
+				res.status(404).json({ error: "Message not found" });
+				return;
+			}
+			res.json({ message: serializeMessage(message) });
+		} catch (error) {
+			next(error);
+		}
+	},
+);
 
 app.get("/api/gmail/labels", ensureAuthenticated, async (req, res, next) => {
 	try {

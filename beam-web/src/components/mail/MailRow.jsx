@@ -93,6 +93,9 @@ const MailRow = ({
 	const [selectedIds, setSelectedIds] = useState([]);
 	const [activeEmailId, setActiveEmailId] = useState(null);
 	const [hoveredId, setHoveredId] = useState(null);
+	const [detailCache, setDetailCache] = useState({});
+	const [detailLoadingId, setDetailLoadingId] = useState(null);
+	const [detailError, setDetailError] = useState(null);
 
 	const labelLookup = useMemo(() => {
 		const map = new Map();
@@ -144,30 +147,40 @@ const MailRow = ({
 			});
 	}, [sourceMessages, labelLookup]);
 
+	const hydratedMessages = useMemo(
+		() =>
+			preparedMessages.map(message =>
+				detailCache[message.id]
+					? { ...message, ...detailCache[message.id] }
+					: message,
+			),
+		[preparedMessages, detailCache],
+	);
+
 	const viewStart = totalCount
 		? (normalizedPage - 1) * pageSize + 1
-		: preparedMessages.length
+		: hydratedMessages.length
 			? 1
 			: 0;
 	const viewEnd = totalCount
-		? Math.min(viewStart + preparedMessages.length - 1, totalCount)
-		: preparedMessages.length;
+		? Math.min(viewStart + hydratedMessages.length - 1, totalCount)
+		: hydratedMessages.length;
 	const viewRangeLabel = totalCount
 		? `${viewStart}-${Math.max(viewStart, viewEnd)}`
 		: viewEnd
 			? `1-${viewEnd}`
 			: '0';
-	const totalLabel = totalCount || preparedMessages.length || 0;
+	const totalLabel = totalCount || hydratedMessages.length || 0;
 	const headerTitle = activeLabel?.name || 'All Mail';
 	const disablePrev = normalizedPage <= 1;
 	const disableNext = totalCount
 		? viewEnd >= totalCount
-		: preparedMessages.length < pageSize;
+		: hydratedMessages.length < pageSize;
 
 	const groupedMessages = useMemo(() => {
 		const groups = [];
 		const map = new Map();
-		preparedMessages.forEach(message => {
+		hydratedMessages.forEach(message => {
 			if (!map.has(message.group)) {
 				const bucket = [];
 				map.set(message.group, bucket);
@@ -176,16 +189,16 @@ const MailRow = ({
 			map.get(message.group).push(message);
 		});
 		return groups;
-	}, [preparedMessages]);
+	}, [hydratedMessages]);
 
 	useEffect(() => {
-		setSelectedIds(ids => ids.filter(id => preparedMessages.some(msg => msg.id === id)));
-		if (activeEmailId && !preparedMessages.some(msg => msg.id === activeEmailId)) {
+		setSelectedIds(ids => ids.filter(id => hydratedMessages.some(msg => msg.id === id)));
+		if (activeEmailId && !hydratedMessages.some(msg => msg.id === activeEmailId)) {
 			setActiveEmailId(null);
 		}
-	}, [preparedMessages, activeEmailId]);
+	}, [hydratedMessages, activeEmailId]);
 
-	const activeEmail = preparedMessages.find(msg => msg.id === activeEmailId);
+	const activeEmail = hydratedMessages.find(msg => msg.id === activeEmailId);
 	const isSelectionMode = selectedIds.length > 0;
 
 	const toggleSelection = (id, e) => {
@@ -194,8 +207,8 @@ const MailRow = ({
 	};
 
 	const selectAll = () => {
-		if (selectedIds.length === preparedMessages.length) setSelectedIds([]);
-		else setSelectedIds(preparedMessages.map(e => e.id));
+		if (selectedIds.length === hydratedMessages.length) setSelectedIds([]);
+		else setSelectedIds(hydratedMessages.map(e => e.id));
 	};
 
 	const handlePrevPage = () => {
@@ -227,6 +240,63 @@ const MailRow = ({
 		}
 		return <Text style={{ color: '#8c8c8c' }}>No body preview available. Open in Gmail for the full message.</Text>;
 	};
+
+	useEffect(() => {
+		if (!activeEmailId) {
+			setDetailLoadingId(null);
+			setDetailError(null);
+			return;
+		}
+
+		const current = hydratedMessages.find(msg => msg.id === activeEmailId);
+		if (!current) {
+			return;
+		}
+
+		if (current.plainBody || current.htmlBody) {
+			setDetailLoadingId(null);
+			setDetailError(null);
+			return;
+		}
+
+		let cancelled = false;
+		setDetailLoadingId(activeEmailId);
+		setDetailError(null);
+
+		(async () => {
+			try {
+				const response = await fetch(`/api/gmail/messages/${activeEmailId}`, {
+					credentials: 'include',
+				});
+				if (!response.ok) {
+					throw new Error('Failed to load email content');
+				}
+				const payload = await response.json();
+				if (cancelled) return;
+				if (payload.message) {
+					const { plainBody, htmlBody, snippet, labelIds } = payload.message;
+					setDetailCache(prev => ({
+						...prev,
+						[activeEmailId]: {
+							plainBody,
+							htmlBody,
+							snippet,
+							labelIds,
+						},
+					}));
+				}
+				setDetailLoadingId(null);
+			} catch (fetchError) {
+				if (cancelled) return;
+				setDetailError(fetchError.message || 'Unable to load email content');
+				setDetailLoadingId(null);
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [activeEmailId, hydratedMessages]);
 
 	return (
 		<ConfigProvider
@@ -264,7 +334,7 @@ const MailRow = ({
 								<div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
 									<Checkbox
 										checked={selectedIds.length > 0}
-										indeterminate={selectedIds.length > 0 && selectedIds.length < preparedMessages.length}
+										indeterminate={selectedIds.length > 0 && selectedIds.length < hydratedMessages.length}
 										onChange={selectAll}
 									/>
 									<Text style={{ color: '#8a83ff', fontWeight: 500 }}>{selectedIds.length} selected</Text>
@@ -495,6 +565,20 @@ const MailRow = ({
 						</div>
 
 						<div style={{ padding: '40px', overflowY: 'auto' }}>
+							{detailError && (
+								<Alert
+									type="error"
+									message="Unable to load email content"
+									description={detailError}
+									showIcon
+									style={{ marginBottom: 16 }}
+								/>
+							)}
+							{detailLoadingId === activeEmailId && (
+								<div style={{ marginBottom: 16 }}>
+									<Spin size="small" tip="Loading email content..." />
+								</div>
+							)}
 							<Title level={2} style={{ marginBottom: '16px' }}>{activeEmail.subject || '(No subject)'}</Title>
 
 							<div style={{ display: 'flex', gap: '8px', marginBottom: '32px' }}>
