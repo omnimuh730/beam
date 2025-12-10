@@ -30,7 +30,17 @@ const utilityItems = [
 	{ key: 'feedback', label: 'Send feedback', icon: <QuestionCircleOutlined /> },
 ];
 
-const Sidebar = ({ user, loadingUser, labels = [], onLogin, onLogout, onSync, syncing }) => {
+const Sidebar = ({
+	user,
+	loadingUser,
+	labels = [],
+	selectedKey = 'all',
+	onMenuSelect,
+	onLogin,
+	onLogout,
+	onSync,
+	syncing,
+}) => {
 	const isAuthenticated = Boolean(user);
 
 	const handleAuthClick = () => {
@@ -56,8 +66,7 @@ const Sidebar = ({ user, loadingUser, labels = [], onLogin, onLogout, onSync, sy
 
 	const userLabelItems = useMemo(() => {
 		return (labels || [])
-			.filter(label => label.type !== 'system')
-			.slice(0, 10)
+			.filter(label => label.type !== 'system' || label.id === 'STARRED')
 			.map(label => ({
 				key: `label-${label.id}`,
 				icon: (
@@ -74,7 +83,9 @@ const Sidebar = ({ user, loadingUser, labels = [], onLogin, onLogout, onSync, sy
 				label: (
 					<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
 						<span style={{ color: '#d6dae8' }}>{label.name}</span>
-						<Text style={{ fontSize: 11, color: '#8c8c8c' }}>{label.messagesUnread ?? 0}</Text>
+						<Text style={{ fontSize: 11, color: '#8c8c8c' }}>
+							{label.messagesUnread ?? 0}
+						</Text>
 					</div>
 				),
 			}));
@@ -199,7 +210,8 @@ const Sidebar = ({ user, loadingUser, labels = [], onLogin, onLogout, onSync, sy
 				<div style={{ flex: 1, overflowY: 'auto' }}>
 					<Menu
 						mode="inline"
-						defaultSelectedKeys={['all']}
+						selectedKeys={[selectedKey]}
+						onClick={({ key }) => onMenuSelect?.(key)}
 						style={{ borderRight: 0, background: 'transparent' }}
 						items={menuItems}
 					/>

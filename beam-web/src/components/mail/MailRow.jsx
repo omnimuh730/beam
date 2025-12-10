@@ -5,7 +5,6 @@ import {
 	MailOutlined,
 	AppstoreOutlined,
 	MoreOutlined,
-	SearchOutlined,
 	FilterOutlined,
 	ReloadOutlined,
 	ArrowLeftOutlined,
@@ -27,7 +26,7 @@ import {
 	Alert,
 } from 'antd';
 
-const { Text, Title, Paragraph } = Typography;
+const { Text, Title } = Typography;
 
 const isSameDay = (a, b) =>
 	a &&
@@ -75,7 +74,15 @@ const extractSender = header => {
 	return header.replace(/<.*?>/g, '').trim();
 };
 
-const MailRow = ({ user, messages = [], labels = [], loading = false, error = null, onRefresh }) => {
+const MailRow = ({
+	user,
+	messages = [],
+	labels = [],
+	activeLabelId = null,
+	loading = false,
+	error = null,
+	onRefresh,
+}) => {
 	const [selectedIds, setSelectedIds] = useState([]);
 	const [activeEmailId, setActiveEmailId] = useState(null);
 	const [hoveredId, setHoveredId] = useState(null);
@@ -86,8 +93,19 @@ const MailRow = ({ user, messages = [], labels = [], loading = false, error = nu
 		return map;
 	}, [labels]);
 
+	const activeLabel = activeLabelId ? labelLookup.get(activeLabelId) : null;
+
+	const sourceMessages = useMemo(() => {
+		if (!activeLabelId) {
+			return messages || [];
+		}
+		return (messages || []).filter(message =>
+			(message.labelIds || []).includes(activeLabelId),
+		);
+	}, [messages, activeLabelId]);
+
 	const preparedMessages = useMemo(() => {
-		return (messages || [])
+		return sourceMessages
 			.map(message => {
 				const date = message.internalDate ? new Date(message.internalDate) : null;
 				const userLabel = (message.labelIds || [])
@@ -115,7 +133,9 @@ const MailRow = ({ user, messages = [], labels = [], loading = false, error = nu
 				const timeB = b.date ? b.date.getTime() : 0;
 				return timeB - timeA;
 			});
-	}, [messages, labelLookup]);
+	}, [sourceMessages, labelLookup]);
+
+	const headerTitle = activeLabel?.name || 'All Mail';
 
 	const groupedMessages = useMemo(() => {
 		const groups = [];
@@ -151,13 +171,24 @@ const MailRow = ({ user, messages = [], labels = [], loading = false, error = nu
 		else setSelectedIds(preparedMessages.map(e => e.id));
 	};
 
-	const renderMessageBody = body => {
-		if (!body) return null;
-		return body.split('\n').map((line, idx) => (
-			<Paragraph key={`${line}-${idx}`} style={{ color: '#d9d9d9', marginBottom: 12 }}>
-				{line}
-			</Paragraph>
-		));
+	const renderActiveBody = () => {
+		if (!activeEmail) return null;
+		if (activeEmail.htmlBody) {
+			return (
+				<div
+					style={{ fontSize: '15px', lineHeight: 1.8, color: '#d9d9d9', wordBreak: 'break-word' }}
+					dangerouslySetInnerHTML={{ __html: activeEmail.htmlBody }}
+				/>
+			);
+		}
+		if (activeEmail.plainBody) {
+			return (
+				<pre style={{ fontSize: '15px', lineHeight: 1.8, color: '#d9d9d9', whiteSpace: 'pre-wrap', background: 'transparent', border: 'none', padding: 0, margin: 0 }}>
+					{activeEmail.plainBody}
+				</pre>
+			);
+		}
+		return <Text style={{ color: '#8c8c8c' }}>No body preview available. Open in Gmail for the full message.</Text>;
 	};
 
 	return (
@@ -212,7 +243,7 @@ const MailRow = ({ user, messages = [], labels = [], loading = false, error = nu
 							<>
 								<div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
 									<AppstoreOutlined style={{ fontSize: '16px' }} />
-									<Title level={5} style={{ margin: 0 }}>All Mail</Title>
+									<Title level={5} style={{ margin: 0 }}>{headerTitle}</Title>
 									{user && (
 										<span
 											style={{
@@ -256,7 +287,13 @@ const MailRow = ({ user, messages = [], labels = [], loading = false, error = nu
 						)}
 						{groupedMessages.length === 0 && !loading && !error && (
 							<Empty
-								description={<Text style={{ color: '#8c8c8c' }}>No Gmail messages cached yet. Try syncing.</Text>}
+								description={(
+									<Text style={{ color: '#8c8c8c' }}>
+										{activeLabel
+											? `No conversations for "${activeLabel.name}" yet.`
+											: 'No Gmail messages cached yet. Try syncing.'}
+									</Text>
+								)}
 								image={Empty.PRESENTED_IMAGE_SIMPLE}
 								style={{ marginTop: 64 }}
 							/>
@@ -429,13 +466,7 @@ const MailRow = ({ user, messages = [], labels = [], loading = false, error = nu
 								</div>
 							</div>
 
-							{activeEmail.plainBody ? (
-								<div style={{ fontSize: '16px', lineHeight: 1.8, color: '#d9d9d9' }}>
-									{renderMessageBody(activeEmail.plainBody)}
-								</div>
-							) : (
-								<Text style={{ color: '#8c8c8c' }}>No body preview available. Open in Gmail for the full message.</Text>
-							)}
+							{renderActiveBody()}
 						</div>
 					</div>
 				)}

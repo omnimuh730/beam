@@ -24,6 +24,13 @@ const layoutStyle = {
 	maxWidth: 'calc(100%)',
 };
 
+const SYSTEM_LABEL_MAP = {
+	sent: 'SENT',
+	drafts: 'DRAFT',
+	spam: 'SPAM',
+	trash: 'TRASH',
+};
+
 const App = () => {
 	const [user, setUser] = useState(null);
 	const [loadingUser, setLoadingUser] = useState(false);
@@ -32,6 +39,8 @@ const App = () => {
 	const [mailboxLoading, setMailboxLoading] = useState(false);
 	const [mailboxError, setMailboxError] = useState(null);
 	const [syncingMailbox, setSyncingMailbox] = useState(false);
+	const [selectedMenuKey, setSelectedMenuKey] = useState('all');
+	const [activeLabelId, setActiveLabelId] = useState(null);
 
 	const fetchCurrentUser = useCallback(async () => {
 		setLoadingUser(true);
@@ -70,7 +79,7 @@ const App = () => {
 	};
 
 	const loadMailboxData = useCallback(async () => {
-		if (!user) return;
+		if (!user) return false;
 		setMailboxLoading(true);
 		setMailboxError(null);
 		try {
@@ -91,9 +100,11 @@ const App = () => {
 
 			setMessages(messagesPayload.messages || []);
 			setLabels(labelsPayload.labels || []);
+			return Boolean(messagesPayload.messages?.length);
 		} catch (error) {
 			console.error(error);
 			setMailboxError(error.message || 'Unable to load mailbox');
+			return false;
 		} finally {
 			setMailboxLoading(false);
 		}
@@ -129,16 +140,38 @@ const App = () => {
 			setMessages([]);
 			setLabels([]);
 			setMailboxError(null);
+			setSelectedMenuKey('all');
+			setActiveLabelId(null);
 			return;
 		}
-		loadMailboxData();
-	}, [user, loadMailboxData]);
+		let cancelled = false;
+		const hydrate = async () => {
+			const hasData = await loadMailboxData();
+			if (!hasData && !cancelled) {
+				syncMailbox({ forceFull: true }).catch(() => {});
+			}
+		};
+		hydrate();
+		return () => {
+			cancelled = true;
+		};
+	}, [user, loadMailboxData, syncMailbox]);
 
-	useEffect(() => {
-		if (user) {
-			syncMailbox({ forceFull: true }).catch(() => {});
+	const handleMenuSelect = useCallback((key) => {
+		setSelectedMenuKey(key);
+		if (key === 'all') {
+			setActiveLabelId(null);
+			return;
 		}
-	}, [user, syncMailbox]);
+
+		if (key.startsWith('label-')) {
+			setActiveLabelId(key.replace('label-', ''));
+			return;
+		}
+
+		const systemLabel = SYSTEM_LABEL_MAP[key];
+		setActiveLabelId(systemLabel || null);
+	}, []);
 
 	return (
 		<Flex gap="middle" wrap>
@@ -148,6 +181,8 @@ const App = () => {
 						user={user}
 						loadingUser={loadingUser}
 						labels={labels}
+						selectedKey={selectedMenuKey}
+						onMenuSelect={handleMenuSelect}
 						onSync={() => syncMailbox()}
 						syncing={syncingMailbox}
 						onLogin={handleLogin}
@@ -160,6 +195,7 @@ const App = () => {
 							user={user}
 							messages={messages}
 							labels={labels}
+							activeLabelId={activeLabelId}
 							loading={mailboxLoading || syncingMailbox}
 							error={mailboxError}
 							onRefresh={() => syncMailbox()}

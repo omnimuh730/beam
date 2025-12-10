@@ -5,19 +5,27 @@ import {
 	GmailMessageModel,
 	type GmailMessageDocument,
 } from "../models/GmailMessage";
-import { UserModel, type UserDocument } from "../models/User";
+import { UserModel } from "../models/User";
 
 type UserWithTokens = NonNullable<
 	Awaited<ReturnType<typeof loadUserWithTokens>>
 >;
 
 const GMAIL_BASE_URL = "https://gmail.googleapis.com/gmail/v1/users/me";
-const GMAIL_HISTORY_TYPES = [
+const GMAIL_HISTORY_TYPES: string[] = [
 	"labelAdded",
 	"labelRemoved",
 	"messageAdded",
 	"messageDeleted",
-] as const;
+];
+
+const METADATA_HEADERS: string[] = [
+	"Subject",
+	"From",
+	"To",
+	"Date",
+	"Delivered-To",
+];
 
 const RATE_LIMIT_DELAY_MS = Number(
 	process.env.GMAIL_RATE_LIMIT_MS ?? "200",
@@ -187,10 +195,18 @@ const gmailRequest = async <T>(
 	return response.json() as Promise<T>;
 };
 
+const removeUndefined = <T extends Record<string, unknown>>(obj: T) => {
+	return Object.fromEntries(
+		Object.entries(obj).filter(([, value]) => value !== undefined),
+	) as Partial<T>;
+};
+
 const upsertMessage = async (
 	user: UserWithTokens,
 	message: GmailApiMessage,
+	options: { replaceBody?: boolean } = {},
 ) => {
+	const { replaceBody = true } = options;
 	const headers = message.payload?.headers;
 	const subject = pickHeader(headers, "Subject");
 	const from = pickHeader(headers, "From");
@@ -223,9 +239,16 @@ const upsertMessage = async (
 		lastSyncedAt: new Date(),
 	};
 
+	const updateDoc = removeUndefined(doc);
+
+	if (!replaceBody) {
+		delete updateDoc.plainBody;
+		delete updateDoc.htmlBody;
+	}
+
 	await GmailMessageModel.findOneAndUpdate(
 		{ user: user._id, gmailId: message.id } as FilterQuery<GmailMessageDocument>,
-		doc,
+		{ $set: updateDoc },
 		{ upsert: true, new: true, setDefaultsOnInsert: true },
 	);
 };
@@ -288,7 +311,7 @@ const performFullSync = async (user: UserWithTokens) => {
 				format: "full",
 			},
 		);
-		await upsertMessage(user, message);
+		await upsertMessage(user, message, { replaceBody: true });
 		summary.upserted += 1;
 	}
 
@@ -316,19 +339,25 @@ const performDeltaSync = async (user: UserWithTokens, startHistoryId: string) =>
 		);
 
 		const historyEntries = historyResponse.history ?? [];
-		const idsToFetch = new Set<string>();
+		const idsForFullFetch = new Set<string>();
+		const idsForMetadata = new Set<string>();
 		const idsToDelete = new Set<string>();
+
+		const queueMeta = (id?: string) => {
+			if (!id || idsForFullFetch.has(id)) return;
+			idsForMetadata.add(id);
+		};
 
 		for (const entry of historyEntries) {
 			latestHistoryId = entry.id ?? latestHistoryId;
 			entry.messagesAdded?.forEach(item =>
-				item.message?.id && idsToFetch.add(item.message.id),
+				item.message?.id && idsForFullFetch.add(item.message.id),
 			);
 			entry.labelsAdded?.forEach(item =>
-				item.message?.id && idsToFetch.add(item.message.id),
+				queueMeta(item.message?.id),
 			);
 			entry.labelsRemoved?.forEach(item =>
-				item.message?.id && idsToFetch.add(item.message.id),
+				queueMeta(item.message?.id),
 			);
 			entry.messagesDeleted?.forEach(item =>
 				item.message?.id && idsToDelete.add(item.message.id),
@@ -343,7 +372,7 @@ const performDeltaSync = async (user: UserWithTokens, startHistoryId: string) =>
 			summary.deleted += result.deletedCount ?? 0;
 		}
 
-		for (const id of idsToFetch) {
+		for (const id of idsForFullFetch) {
 			await delay(RATE_LIMIT_DELAY_MS);
 			const message = await gmailRequest<GmailApiMessage>(
 				user,
@@ -352,7 +381,22 @@ const performDeltaSync = async (user: UserWithTokens, startHistoryId: string) =>
 					format: "full",
 				},
 			);
-			await upsertMessage(user, message);
+			await upsertMessage(user, message, { replaceBody: true });
+			summary.upserted += 1;
+			idsForMetadata.delete(id);
+		}
+
+		for (const id of idsForMetadata) {
+			await delay(RATE_LIMIT_DELAY_MS);
+			const message = await gmailRequest<GmailApiMessage>(
+				user,
+				`messages/${id}`,
+				{
+					format: "metadata",
+					metadataHeaders: METADATA_HEADERS,
+				},
+			);
+			await upsertMessage(user, message, { replaceBody: false });
 			summary.upserted += 1;
 		}
 
