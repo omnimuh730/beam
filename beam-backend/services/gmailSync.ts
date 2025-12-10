@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { FilterQuery } from "mongoose";
+import { FilterQuery, Types } from "mongoose";
 import { GmailLabelModel } from "../models/GmailLabel";
 import {
 	GmailMessageModel,
@@ -529,6 +529,46 @@ export const applyLabelToMessages = async (
 	);
 
 	return { modified: result.modifiedCount ?? 0 };
+};
+
+export const getLabelUsageStats = async (userId: string) => {
+	const userObjectId = new Types.ObjectId(userId);
+	const stats = await GmailMessageModel.aggregate<{
+		_id: string;
+		total: number;
+		unread: number;
+	}>([
+		{ $match: { user: userObjectId } },
+		{
+			$addFields: {
+				isUnread: {
+					$in: ["UNREAD", "$labelIds"],
+				},
+			},
+		},
+		{ $unwind: "$labelIds" },
+		{
+			$group: {
+				_id: "$labelIds",
+				total: { $sum: 1 },
+				unread: {
+					$sum: {
+						$cond: [{ $eq: ["$isUnread", true] }, 1, 0],
+					},
+				},
+			},
+		},
+	]);
+
+	const result: Record<string, { total: number; unread: number }> = {};
+	stats.forEach(entry => {
+		if (!entry?._id) return;
+		result[String(entry._id)] = {
+			total: entry.total ?? 0,
+			unread: entry.unread ?? 0,
+		};
+	});
+	return result;
 };
 
 type GmailApiProfile = {

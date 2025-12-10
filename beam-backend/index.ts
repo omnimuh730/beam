@@ -14,6 +14,7 @@ import {
 	syncMailboxForUser,
 	getMessageWithBody,
 	applyLabelToMessages,
+	getLabelUsageStats,
 } from "./services/gmailSync";
 
 declare global {
@@ -360,6 +361,19 @@ app.post(
 			);
 
 			res.json({ ok: true, modified: result.modified });
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
+app.get(
+	"/api/gmail/labels/stats",
+	ensureAuthenticated,
+	async (req, res, next) => {
+		try {
+			const stats = await getLabelUsageStats(req.user.id);
+			res.json({ stats });
 		} catch (error) {
 			next(error);
 		}

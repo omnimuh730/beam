@@ -26,7 +26,8 @@ const App = () => {
 	const [page, setPage] = useState(1);
 	const [pageSize] = useState(50);
 	const [totalMessages, setTotalMessages] = useState(0);
-	const labelStats = useMemo(() => {
+	const [serverLabelStats, setServerLabelStats] = useState(() => new Map());
+	const visibleLabelStats = useMemo(() => {
 		const stats = new Map();
 		(messages || []).forEach(message => {
 			const labelIds = message.labelIds || [];
@@ -43,6 +44,34 @@ const App = () => {
 		});
 		return stats;
 	}, [messages]);
+
+	const fetchLabelStats = useCallback(async () => {
+		if (!user) {
+			setServerLabelStats(new Map());
+			return;
+		}
+		try {
+			const response = await fetch('/api/gmail/labels/stats', {
+				credentials: 'include',
+			});
+			if (!response.ok) {
+				throw new Error('Failed to load label stats');
+			}
+			const payload = await response.json();
+			const stats = payload?.stats || {};
+			const nextMap = new Map();
+			Object.entries(stats).forEach(([key, value]) => {
+				const details = value || {};
+				nextMap.set(key, {
+					total: Number(details.total) || 0,
+					unread: Number(details.unread) || 0,
+				});
+			});
+			setServerLabelStats(nextMap);
+		} catch (error) {
+			console.error('Unable to fetch label stats', error);
+		}
+	}, [user]);
 
 	const fetchCurrentUser = useCallback(async () => {
 		setLoadingUser(true);
@@ -144,6 +173,7 @@ const App = () => {
 					throw new Error('Failed to synchronize Gmail');
 				}
 				await loadMailboxData();
+				await fetchLabelStats();
 			} catch (error) {
 				console.error(error);
 				setMailboxError(error.message || 'Unable to synchronize mailbox');
@@ -151,7 +181,7 @@ const App = () => {
 				setSyncingMailbox(false);
 			}
 		},
-		[user, loadMailboxData],
+		[user, loadMailboxData, fetchLabelStats],
 	);
 
 	useEffect(() => {
@@ -163,11 +193,13 @@ const App = () => {
 			setActiveLabelId(null);
 			setPage(1);
 			setTotalMessages(0);
+			setServerLabelStats(new Map());
 			return;
 		}
 		let cancelled = false;
 		const hydrate = async () => {
 			const hasData = await loadMailboxData();
+			await fetchLabelStats();
 			if (!hasData && !cancelled) {
 				syncMailbox({ forceFull: true }).catch(() => { });
 			}
@@ -176,7 +208,7 @@ const App = () => {
 		return () => {
 			cancelled = true;
 		};
-	}, [user, loadMailboxData, syncMailbox]);
+	}, [user, loadMailboxData, syncMailbox, fetchLabelStats]);
 
 	const handleMenuSelect = useCallback((key) => {
 		setSelectedMenuKey(key);
@@ -202,6 +234,16 @@ const App = () => {
 			return nextPage;
 		});
 	}, []);
+
+	const combinedLabelStats = useMemo(() => {
+		const merged = new Map(serverLabelStats);
+		visibleLabelStats.forEach((value, key) => {
+			if (!merged.has(key)) {
+				merged.set(key, value);
+			}
+		});
+		return merged;
+	}, [serverLabelStats, visibleLabelStats]);
 
 	const handleApplyLabel = useCallback(async (labelId, targetIds = []) => {
 		if (!labelId || !targetIds.length) return;
@@ -238,10 +280,11 @@ const App = () => {
 					};
 				}),
 			);
+			await fetchLabelStats();
 		} catch (error) {
 			console.error('Unable to apply label', error);
 		}
-	}, []);
+	}, [fetchLabelStats]);
 
 	const screens = Grid.useBreakpoint();
 	const padding = screens.md ? 24 : 12;
@@ -270,7 +313,7 @@ const App = () => {
 						user={user}
 						loadingUser={loadingUser}
 						labels={labels}
-						labelStats={labelStats}
+						labelStats={combinedLabelStats}
 						selectedKey={selectedMenuKey}
 						onMenuSelect={handleMenuSelect}
 						onSync={() => syncMailbox()}
