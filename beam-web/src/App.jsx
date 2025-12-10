@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Layout, Grid, Row, Col } from 'antd';
 
 import SideBar from './components/layout/Sidebar.jsx';
@@ -26,6 +26,23 @@ const App = () => {
 	const [page, setPage] = useState(1);
 	const [pageSize] = useState(50);
 	const [totalMessages, setTotalMessages] = useState(0);
+	const labelStats = useMemo(() => {
+		const stats = new Map();
+		(messages || []).forEach(message => {
+			const labelIds = message.labelIds || [];
+			const isUnread = labelIds.includes('UNREAD');
+			labelIds.forEach(id => {
+				if (!id) return;
+				const entry = stats.get(id) || { total: 0, unread: 0 };
+				entry.total += 1;
+				if (isUnread) {
+					entry.unread += 1;
+				}
+				stats.set(id, entry);
+			});
+		});
+		return stats;
+	}, [messages]);
 
 	const fetchCurrentUser = useCallback(async () => {
 		setLoadingUser(true);
@@ -41,6 +58,7 @@ const App = () => {
 				setUser(null);
 			}
 		} catch (_error) {
+			console.error('Not authenticated', _error);
 			setUser(null);
 		} finally {
 			setLoadingUser(false);
@@ -185,6 +203,26 @@ const App = () => {
 		});
 	}, []);
 
+	const handleApplyLabel = useCallback((labelId, targetIds = []) => {
+		if (!labelId || !targetIds.length) return;
+		setMessages(prev =>
+			prev.map(message => {
+				if (!targetIds.includes(message.id)) {
+					return message;
+				}
+				const nextLabelIds = new Set(message.labelIds || []);
+				if (nextLabelIds.has(labelId)) {
+					return message;
+				}
+				nextLabelIds.add(labelId);
+				return {
+					...message,
+					labelIds: Array.from(nextLabelIds),
+				};
+			}),
+		);
+	}, []);
+
 	const screens = Grid.useBreakpoint();
 	const padding = screens.md ? 24 : 12;
 	const gutter = screens.sm ? 16 : 12;
@@ -212,6 +250,7 @@ const App = () => {
 						user={user}
 						loadingUser={loadingUser}
 						labels={labels}
+						labelStats={labelStats}
 						selectedKey={selectedMenuKey}
 						onMenuSelect={handleMenuSelect}
 						onSync={() => syncMailbox()}
@@ -240,6 +279,7 @@ const App = () => {
 							error={mailboxError}
 							onPageChange={handlePageChange}
 							onRefresh={() => syncMailbox()}
+							onApplyLabel={handleApplyLabel}
 						/>
 					</Content>
 				</Col>

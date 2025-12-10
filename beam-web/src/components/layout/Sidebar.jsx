@@ -14,6 +14,7 @@ import {
 	StarFilled,
 } from '@ant-design/icons';
 import { Menu, Input, Avatar, Typography, Button, ConfigProvider, theme, Dropdown, Grid, Tree } from 'antd';
+import { LABEL_DRAG_TYPE } from '../../constants/dragTypes';
 
 const { Text } = Typography;
 const defaultAvatar = 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix';
@@ -35,6 +36,7 @@ const Sidebar = ({
 	user,
 	loadingUser,
 	labels = [],
+	labelStats,
 	selectedKey = 'all',
 	onMenuSelect,
 	onLogin,
@@ -67,6 +69,12 @@ const Sidebar = ({
 			onLogin?.();
 		}
 	};
+
+	const labelStatsMap = useMemo(() => {
+		if (!labelStats) return new Map();
+		if (labelStats instanceof Map) return labelStats;
+		return new Map(Object.entries(labelStats));
+	}, [labelStats]);
 
 	const filteredLabels = useMemo(() => {
 		const exclusion = '[notion]';
@@ -120,7 +128,8 @@ const Sidebar = ({
 		const buildTreeNodes = nodes =>
 			nodes.map(node => {
 				const label = node.label;
-				const unread = label?.messagesUnread ?? 0;
+				const stats = label ? labelStatsMap.get(label.id) : null;
+				const unread = stats?.unread ?? label?.messagesUnread ?? 0;
 				const color = label?.color?.backgroundColor || '#8a83ff';
 				const key = label ? `label-${label.id}` : `path-${node.path}`;
 
@@ -128,6 +137,7 @@ const Sidebar = ({
 					key,
 					labelId: label?.id,
 					selectable: Boolean(label),
+					disableDrag: !label,
 					title: (
 						<div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
 							<span
@@ -152,9 +162,11 @@ const Sidebar = ({
 							>
 								{node.segment}
 							</Text>
-							<Text style={{ fontSize: 11, color: '#8c8c8c' }}>
-								{unread}
-							</Text>
+							{unread > 0 && (
+								<Text style={{ fontSize: 11, color: '#8c8c8c' }}>
+									{unread}
+								</Text>
+							)}
 						</div>
 					),
 					children: buildTreeNodes(node.children),
@@ -162,7 +174,7 @@ const Sidebar = ({
 			});
 
 		return buildTreeNodes(roots);
-	}, [filteredLabels]);
+	}, [filteredLabels, labelStatsMap]);
 
 	const menuItems = useMemo(() => {
 		return [
@@ -177,15 +189,31 @@ const Sidebar = ({
 	}, []);
 
 	const labelGraph = useMemo(() => {
-		return [...filteredLabels]
-			.sort((a, b) => (b.messagesTotal ?? 0) - (a.messagesTotal ?? 0))
-			.slice(0, 5);
-	}, [filteredLabels]);
+		const enriched = filteredLabels
+			.map(label => {
+				const stats = labelStatsMap.get(label.id);
+				return {
+					...label,
+					total: stats?.total ?? label.messagesTotal ?? 0,
+					unread: stats?.unread ?? label.messagesUnread ?? 0,
+				};
+			})
+			.filter(item => item.total > 0);
+
+		enriched.sort((a, b) => b.total - a.total);
+		const items = enriched.slice(0, 5);
+		const maxTotal = items.length ? items[0].total : 0;
+		return { items, maxTotal };
+	}, [filteredLabels, labelStatsMap]);
 
 	const starredLabel = useMemo(
 		() => (labels || []).find(label => label.id === 'STARRED'),
 		[labels],
 	);
+	const starredUnread = (() => {
+		const stats = labelStatsMap.get('STARRED');
+		return stats?.unread ?? starredLabel?.messagesUnread ?? 0;
+	})();
 
 	const handleLabelSelect = (_keys, info) => {
 		const labelId = info?.node?.labelId;
@@ -196,6 +224,25 @@ const Sidebar = ({
 
 	const handleStarredClick = () => {
 		onMenuSelect?.('label-STARRED');
+	};
+
+	const handleLabelDragStart = info => {
+		const labelId = info?.node?.labelId;
+		if (!labelId) return;
+		const dataTransfer = info?.event?.dataTransfer;
+		if (!dataTransfer) return;
+		dataTransfer.setData(LABEL_DRAG_TYPE, labelId);
+		dataTransfer.setData('text/plain', labelId);
+		dataTransfer.effectAllowed = 'copy';
+	};
+
+	const handleStarredDragStart = event => {
+		if (!starredLabel) return;
+		const { dataTransfer } = event;
+		if (!dataTransfer) return;
+		dataTransfer.setData(LABEL_DRAG_TYPE, 'STARRED');
+		dataTransfer.setData('text/plain', 'STARRED');
+		dataTransfer.effectAllowed = 'copy';
 	};
 
 	const menuSelectedKeys = isLabelSelection ? [] : [selectedKey];
@@ -309,6 +356,8 @@ const Sidebar = ({
 							<button
 								type="button"
 								onClick={handleStarredClick}
+								onDragStart={handleStarredDragStart}
+								draggable
 								style={{
 									border: '1px solid #333',
 									width: '100%',
@@ -325,9 +374,11 @@ const Sidebar = ({
 									<StarFilled style={{ color: '#fadb14', fontSize: 18 }} />
 									<Text style={{ color: '#f5f5f5', fontWeight: 500 }}>Starred</Text>
 								</span>
-								<Text style={{ color: '#8c8c8c', fontSize: 12 }}>
-									{starredLabel.messagesUnread ?? 0}
-								</Text>
+								{starredUnread > 0 && (
+									<Text style={{ color: '#8c8c8c', fontSize: 12 }}>
+										{starredUnread}
+									</Text>
+								)}
 							</button>
 						)}
 
@@ -341,9 +392,12 @@ const Sidebar = ({
 									showLine={{ showLeafIcon: false }}
 									blockNode
 									defaultExpandAll
+									draggable
+									allowDrop={() => false}
 									treeData={labelTreeData}
 									selectedKeys={labelSelectedKeys}
 									onSelect={handleLabelSelect}
+									onDragStart={handleLabelDragStart}
 									style={{
 										background: 'transparent',
 										color: '#d6dae8',
@@ -359,19 +413,19 @@ const Sidebar = ({
 								<TagOutlined style={{ color: '#8c8c8c' }} />
 								<Text style={{ color: '#8c8c8c', fontSize: 12, letterSpacing: '0.05em' }}>LABEL GRAPH</Text>
 							</div>
-							{labelGraph.length ? (
-								labelGraph.map(label => {
-									const total = label.messagesTotal ?? 0;
-									const unread = label.messagesUnread ?? 0;
-									const percent = total ? Math.min(100, Math.round((unread / total) * 100)) : unread ? 100 : 0;
+							{labelGraph.items.length ? (
+								labelGraph.items.map(label => {
+									const total = label.total;
 									const color = label.color?.backgroundColor || '#8a83ff';
+									const percent = labelGraph.maxTotal
+										? Math.round((total / labelGraph.maxTotal) * 100)
+										: 0;
 									return (
 										<div key={label.id} style={{ marginBottom: 8 }}>
 											<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
 												<span style={{ color: '#d6dae8', fontSize: 12 }}>{label.name}</span>
 												<Text style={{ fontSize: 11, color: '#8c8c8c' }}>
-													{unread}
-													{total ? `/${total}` : ''}
+													{total}
 												</Text>
 											</div>
 											<div style={{ height: 6, borderRadius: 999, background: '#1f1f1f', marginTop: 4 }}>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
 	StarOutlined,
 	DeleteOutlined,
@@ -31,6 +31,7 @@ import {
 	Col,
 	Grid,
 } from 'antd';
+import { LABEL_DRAG_TYPE } from '../../constants/dragTypes';
 
 const { Text, Title } = Typography;
 
@@ -80,6 +81,17 @@ const extractSender = header => {
 	return header.replace(/<.*?>/g, '').trim();
 };
 
+const isModifierRangeEvent = event => Boolean(event?.ctrlKey || event?.metaKey);
+
+const isLabelDragEvent = event => {
+	const types = event?.dataTransfer?.types;
+	if (!types) return false;
+	if (typeof types.includes === 'function') {
+		return types.includes(LABEL_DRAG_TYPE);
+	}
+	return Array.from(types).includes(LABEL_DRAG_TYPE);
+};
+
 const MailRow = ({
 	user,
 	messages = [],
@@ -92,6 +104,7 @@ const MailRow = ({
 	error = null,
 	onRefresh,
 	onPageChange,
+	onApplyLabel,
 }) => {
 	const screens = Grid.useBreakpoint();
 	const isDesktop = screens.lg;
@@ -102,6 +115,7 @@ const MailRow = ({
 	const [detailLoadingId, setDetailLoadingId] = useState(null);
 	const [detailError, setDetailError] = useState(null);
 	const hasDetailPanel = Boolean(activeEmailId) && isDesktop;
+	const lastSelectionRef = useRef(null);
 
 	const labelLookup = useMemo(() => {
 		const map = new Map();
@@ -163,6 +177,14 @@ const MailRow = ({
 		[preparedMessages, detailCache],
 	);
 
+	const messageIndexLookup = useMemo(() => {
+		const indexMap = new Map();
+		hydratedMessages.forEach((message, index) => {
+			indexMap.set(message.id, index);
+		});
+		return indexMap;
+	}, [hydratedMessages]);
+
 	const viewStart = totalCount
 		? (normalizedPage - 1) * pageSize + 1
 		: hydratedMessages.length
@@ -202,20 +224,106 @@ const MailRow = ({
 		if (activeEmailId && !hydratedMessages.some(msg => msg.id === activeEmailId)) {
 			setActiveEmailId(null);
 		}
+		lastSelectionRef.current = null;
 	}, [hydratedMessages, activeEmailId]);
 
 	const activeEmail = hydratedMessages.find(msg => msg.id === activeEmailId);
 	const isSelectionMode = selectedIds.length > 0;
 
-	const toggleSelection = (id, e) => {
-		e.stopPropagation();
-		setSelectedIds(prev => (prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]));
-	};
+	const applySelectionChange = useCallback(
+		({ id, index, shouldSelect, isRange }) => {
+			const lookupIndex = typeof index === 'number' ? index : messageIndexLookup.get(id);
+			const targetIndex = typeof lookupIndex === 'number' ? lookupIndex : -1;
+			if (targetIndex < 0) return;
+
+			setSelectedIds(prev => {
+				const updated = new Set(prev);
+				const targetAlreadySelected = updated.has(id);
+				const nextShouldSelect = typeof shouldSelect === 'boolean' ? shouldSelect : !targetAlreadySelected;
+				const anchorIndex = isRange ? lastSelectionRef.current : null;
+
+				if (isRange && anchorIndex !== null && hydratedMessages.length) {
+					const start = Math.min(anchorIndex, targetIndex);
+					const end = Math.max(anchorIndex, targetIndex);
+					const idsInRange = hydratedMessages.slice(start, end + 1).map(msg => msg.id);
+					idsInRange.forEach(rangeId => {
+						if (nextShouldSelect) {
+							updated.add(rangeId);
+						} else {
+							updated.delete(rangeId);
+						}
+					});
+				} else {
+					if (nextShouldSelect) {
+						updated.add(id);
+					} else {
+						updated.delete(id);
+					}
+				}
+
+				return hydratedMessages
+					.map(msg => msg.id)
+					.filter(messageId => updated.has(messageId));
+			});
+
+			lastSelectionRef.current = targetIndex;
+		},
+		[hydratedMessages, messageIndexLookup],
+	);
 
 	const selectAll = () => {
 		if (selectedIds.length === hydratedMessages.length) setSelectedIds([]);
 		else setSelectedIds(hydratedMessages.map(e => e.id));
+		lastSelectionRef.current = null;
 	};
+
+	const handleCheckboxToggle = (event, id, index) => {
+		event.stopPropagation();
+		const isRange = isModifierRangeEvent(event.nativeEvent || event);
+		applySelectionChange({
+			id,
+			index,
+			shouldSelect: event.target.checked,
+			isRange,
+		});
+	};
+
+	const handleRowClick = (event, id, index) => {
+		if (isModifierRangeEvent(event)) {
+			event.preventDefault();
+			applySelectionChange({
+				id,
+				index,
+				isRange: true,
+			});
+			return;
+		}
+		setActiveEmailId(id);
+	};
+
+	const handleRowDragOver = useCallback(
+		event => {
+			if (!onApplyLabel) return;
+			if (isLabelDragEvent(event)) {
+				event.preventDefault();
+				event.dataTransfer.dropEffect = 'copy';
+			}
+		},
+		[onApplyLabel],
+	);
+
+	const handleDropOnRow = useCallback(
+		(event, messageId, isSelected) => {
+			if (!onApplyLabel || !isLabelDragEvent(event)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			const labelId = event.dataTransfer?.getData(LABEL_DRAG_TYPE);
+			if (!labelId) return;
+			const targets = isSelected && selectedIds.length ? selectedIds : [messageId];
+			onApplyLabel(labelId, targets);
+		},
+		[onApplyLabel, selectedIds],
+	);
 
 	const handlePrevPage = () => {
 		if (disablePrev || loading) return;
@@ -488,13 +596,16 @@ const MailRow = ({
 										const isSelected = selectedIds.includes(item.id);
 										const isHovered = hoveredId === item.id;
 										const isActive = activeEmailId === item.id;
+										const messageIndex = messageIndexLookup.get(item.id);
 
 										return (
 											<div
 												key={item.id}
 												onMouseEnter={() => setHoveredId(item.id)}
 												onMouseLeave={() => setHoveredId(null)}
-												onClick={() => setActiveEmailId(item.id)}
+												onClick={(event) => handleRowClick(event, item.id, messageIndex)}
+												onDragOver={handleRowDragOver}
+												onDrop={(event) => handleDropOnRow(event, item.id, isSelected)}
 												style={{
 													display: 'flex',
 													alignItems: 'center',
@@ -512,7 +623,10 @@ const MailRow = ({
 											>
 												<div style={{ width: 28, display: 'flex', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
 													{(isHovered || isSelected) ? (
-														<Checkbox checked={isSelected} onChange={(e) => toggleSelection(item.id, e)} />
+														<Checkbox
+															checked={isSelected}
+															onChange={(event) => handleCheckboxToggle(event, item.id, messageIndex)}
+														/>
 													) : null}
 												</div>
 
