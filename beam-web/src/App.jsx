@@ -41,6 +41,9 @@ const App = () => {
 	const [syncingMailbox, setSyncingMailbox] = useState(false);
 	const [selectedMenuKey, setSelectedMenuKey] = useState('all');
 	const [activeLabelId, setActiveLabelId] = useState(null);
+	const [page, setPage] = useState(1);
+	const [pageSize] = useState(50);
+	const [totalMessages, setTotalMessages] = useState(0);
 
 	const fetchCurrentUser = useCallback(async () => {
 		setLoadingUser(true);
@@ -83,8 +86,16 @@ const App = () => {
 		setMailboxLoading(true);
 		setMailboxError(null);
 		try {
+			const params = new URLSearchParams({
+				limit: String(pageSize),
+				page: String(page),
+			});
+			if (activeLabelId) {
+				params.set('labelId', activeLabelId);
+			}
+
 			const [messagesResponse, labelsResponse] = await Promise.all([
-				fetch('/api/gmail/messages?limit=100', { credentials: 'include' }),
+				fetch(`/api/gmail/messages?${params.toString()}`, { credentials: 'include' }),
 				fetch('/api/gmail/labels', { credentials: 'include' }),
 			]);
 
@@ -98,8 +109,16 @@ const App = () => {
 			const messagesPayload = await messagesResponse.json();
 			const labelsPayload = await labelsResponse.json();
 
-			setMessages(messagesPayload.messages || []);
+			const total = messagesPayload.total ?? 0;
+			setTotalMessages(total);
 			setLabels(labelsPayload.labels || []);
+
+			const maxPage = total ? Math.max(1, Math.ceil(total / pageSize)) : 1;
+			if (page > maxPage) {
+				setPage(maxPage);
+			}
+
+			setMessages(messagesPayload.messages || []);
 			return Boolean(messagesPayload.messages?.length);
 		} catch (error) {
 			console.error(error);
@@ -108,7 +127,7 @@ const App = () => {
 		} finally {
 			setMailboxLoading(false);
 		}
-	}, [user]);
+	}, [user, page, pageSize, activeLabelId]);
 
 	const syncMailbox = useCallback(
 		async ({ forceFull = false } = {}) => {
@@ -142,6 +161,8 @@ const App = () => {
 			setMailboxError(null);
 			setSelectedMenuKey('all');
 			setActiveLabelId(null);
+			setPage(1);
+			setTotalMessages(0);
 			return;
 		}
 		let cancelled = false;
@@ -159,6 +180,7 @@ const App = () => {
 
 	const handleMenuSelect = useCallback((key) => {
 		setSelectedMenuKey(key);
+		setPage(1);
 		if (key === 'all') {
 			setActiveLabelId(null);
 			return;
@@ -171,6 +193,14 @@ const App = () => {
 
 		const systemLabel = SYSTEM_LABEL_MAP[key];
 		setActiveLabelId(systemLabel || null);
+	}, []);
+
+	const handlePageChange = useCallback((nextPage) => {
+		setPage(prev => {
+			if (nextPage < 1) return 1;
+			if (nextPage === prev) return prev;
+			return nextPage;
+		});
 	}, []);
 
 	return (
@@ -196,8 +226,12 @@ const App = () => {
 							messages={messages}
 							labels={labels}
 							activeLabelId={activeLabelId}
+							page={page}
+							pageSize={pageSize}
+							total={totalMessages}
 							loading={mailboxLoading || syncingMailbox}
 							error={mailboxError}
+							onPageChange={handlePageChange}
 							onRefresh={() => syncMailbox()}
 						/>
 					</Content>

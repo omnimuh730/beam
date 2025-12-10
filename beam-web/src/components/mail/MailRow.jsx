@@ -12,6 +12,8 @@ import {
 	ClockCircleOutlined,
 	FolderOpenOutlined,
 	TagOutlined,
+	LeftOutlined,
+	RightOutlined,
 } from '@ant-design/icons';
 import {
 	Avatar,
@@ -24,6 +26,7 @@ import {
 	Empty,
 	Spin,
 	Alert,
+	Button,
 } from 'antd';
 
 const { Text, Title } = Typography;
@@ -79,9 +82,13 @@ const MailRow = ({
 	messages = [],
 	labels = [],
 	activeLabelId = null,
+	page = 1,
+	pageSize = 50,
+	total = 0,
 	loading = false,
 	error = null,
 	onRefresh,
+	onPageChange,
 }) => {
 	const [selectedIds, setSelectedIds] = useState([]);
 	const [activeEmailId, setActiveEmailId] = useState(null);
@@ -94,6 +101,8 @@ const MailRow = ({
 	}, [labels]);
 
 	const activeLabel = activeLabelId ? labelLookup.get(activeLabelId) : null;
+	const totalCount = Math.max(0, total ?? 0);
+	const normalizedPage = Math.max(1, page);
 
 	const sourceMessages = useMemo(() => {
 		if (!activeLabelId) {
@@ -135,7 +144,25 @@ const MailRow = ({
 			});
 	}, [sourceMessages, labelLookup]);
 
+	const viewStart = totalCount
+		? (normalizedPage - 1) * pageSize + 1
+		: preparedMessages.length
+			? 1
+			: 0;
+	const viewEnd = totalCount
+		? Math.min(viewStart + preparedMessages.length - 1, totalCount)
+		: preparedMessages.length;
+	const viewRangeLabel = totalCount
+		? `${viewStart}-${Math.max(viewStart, viewEnd)}`
+		: viewEnd
+			? `1-${viewEnd}`
+			: '0';
+	const totalLabel = totalCount || preparedMessages.length || 0;
 	const headerTitle = activeLabel?.name || 'All Mail';
+	const disablePrev = normalizedPage <= 1;
+	const disableNext = totalCount
+		? viewEnd >= totalCount
+		: preparedMessages.length < pageSize;
 
 	const groupedMessages = useMemo(() => {
 		const groups = [];
@@ -169,6 +196,16 @@ const MailRow = ({
 	const selectAll = () => {
 		if (selectedIds.length === preparedMessages.length) setSelectedIds([]);
 		else setSelectedIds(preparedMessages.map(e => e.id));
+	};
+
+	const handlePrevPage = () => {
+		if (disablePrev || loading) return;
+		onPageChange?.(Math.max(1, normalizedPage - 1));
+	};
+
+	const handleNextPage = () => {
+		if (disableNext || loading) return;
+		onPageChange?.(normalizedPage + 1);
 	};
 
 	const renderActiveBody = () => {
@@ -270,6 +307,29 @@ const MailRow = ({
 									<Tooltip title="Refresh Gmail">
 										<ReloadOutlined onClick={() => onRefresh?.()} style={{ cursor: 'pointer' }} spin={loading} />
 									</Tooltip>
+									<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+										<Text style={{ color: '#a0a0a0', fontSize: 12 }}>
+											{totalLabel ? `${viewRangeLabel} of ${totalLabel}` : '0 results'}
+										</Text>
+										<div style={{ display: 'flex', gap: 4 }}>
+											<Button
+												size="small"
+												type="text"
+												disabled={disablePrev || loading}
+												icon={<LeftOutlined />}
+												onClick={handlePrevPage}
+												style={{ color: disablePrev || loading ? '#555' : '#c9c9c9' }}
+											/>
+											<Button
+												size="small"
+												type="text"
+												disabled={disableNext || loading}
+												icon={<RightOutlined />}
+												onClick={handleNextPage}
+												style={{ color: disableNext || loading ? '#555' : '#c9c9c9' }}
+											/>
+										</div>
+									</div>
 								</div>
 							</>
 						)}

@@ -241,10 +241,19 @@ app.get("/api/gmail/messages", ensureAuthenticated, async (req, res, next) => {
 			Number.parseInt(String(req.query.limit ?? "50"), 10) || 50,
 			200,
 		);
+		const page = Math.max(
+			Number.parseInt(String(req.query.page ?? "1"), 10) || 1,
+			1,
+		);
+		const offset = (page - 1) * limit;
 		const labelId =
 			typeof req.query.labelId === "string" ? req.query.labelId : undefined;
 
-		const messages = await listStoredMessages(req.user.id, limit, labelId);
+		const { messages, total } = await listStoredMessages(req.user.id, {
+			limit,
+			offset,
+			labelId,
+		});
 		const payload = messages.map(message => ({
 			id: message.gmailId,
 			threadId: message.threadId,
@@ -259,7 +268,7 @@ app.get("/api/gmail/messages", ensureAuthenticated, async (req, res, next) => {
 			htmlBody: message.htmlBody,
 		}));
 
-		res.json({ messages: payload });
+		res.json({ messages: payload, total, page, limit });
 	} catch (error) {
 		next(error);
 	}

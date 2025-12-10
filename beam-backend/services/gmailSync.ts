@@ -500,7 +500,16 @@ type GmailApiHistoryList = {
 	nextPageToken?: string;
 };
 
-export const listStoredMessages = (userId: string, limit: number, labelId?: string) => {
+type ListMessagesOptions = {
+	limit: number;
+	offset?: number;
+	labelId?: string;
+};
+
+export const listStoredMessages = async (
+	userId: string,
+	{ limit, offset = 0, labelId }: ListMessagesOptions,
+) => {
 	const criteria: FilterQuery<GmailMessageDocument> = {
 		user: userId,
 	};
@@ -509,10 +518,16 @@ export const listStoredMessages = (userId: string, limit: number, labelId?: stri
 		criteria.labelIds = labelId;
 	}
 
-	return GmailMessageModel.find(criteria)
-		.sort({ internalDate: -1 })
-		.limit(limit)
-		.lean();
+	const [messages, total] = await Promise.all([
+		GmailMessageModel.find(criteria)
+			.sort({ internalDate: -1 })
+			.skip(offset)
+			.limit(limit)
+			.lean(),
+		GmailMessageModel.countDocuments(criteria),
+	]);
+
+	return { messages, total };
 };
 
 export const listStoredLabels = (userId: string) =>
