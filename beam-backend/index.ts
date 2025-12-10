@@ -13,6 +13,7 @@ import {
 	listStoredMessages,
 	syncMailboxForUser,
 	getMessageWithBody,
+	applyLabelToMessages,
 } from "./services/gmailSync";
 
 declare global {
@@ -324,6 +325,46 @@ app.get("/api/gmail/labels", ensureAuthenticated, async (req, res, next) => {
 		next(error);
 	}
 });
+
+app.post(
+	"/api/gmail/messages/apply-label",
+	ensureAuthenticated,
+	async (req, res, next) => {
+		try {
+			const { labelId, messageIds } = req.body ?? {};
+			if (
+				typeof labelId !== "string" ||
+				!Array.isArray(messageIds) ||
+				!messageIds.length
+			) {
+				res
+					.status(400)
+					.json({ error: "labelId and messageIds are required" });
+				return;
+			}
+
+			const normalizedIds = messageIds
+				.map(id => String(id))
+				.filter(Boolean);
+			if (!normalizedIds.length) {
+				res
+					.status(400)
+					.json({ error: "messageIds must include at least one id" });
+				return;
+			}
+
+			const result = await applyLabelToMessages(
+				req.user.id,
+				labelId,
+				normalizedIds,
+			);
+
+			res.json({ ok: true, modified: result.modified });
+		} catch (error) {
+			next(error);
+		}
+	},
+);
 
 app.use((_req, res) => {
 	res.status(404).json({

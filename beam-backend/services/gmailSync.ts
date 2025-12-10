@@ -501,6 +501,36 @@ const loadUserWithTokens = async (userId: string) =>
 		"+accessToken +refreshToken +tokenExpiry +lastHistoryId",
 	);
 
+export const applyLabelToMessages = async (
+	userId: string,
+	labelId: string,
+	messageIds: string[],
+) => {
+	if (!labelId || !messageIds?.length) {
+		return { modified: 0 };
+	}
+
+	const user = await loadUserWithTokens(userId);
+	if (!user) {
+		throw new Error("Unable to load user for label application");
+	}
+
+	await gmailRequest(user, "messages/batchModify", {}, {
+		method: "POST",
+		body: JSON.stringify({
+			ids: messageIds,
+			addLabelIds: [labelId],
+		}),
+	});
+
+	const result = await GmailMessageModel.updateMany(
+		{ user: user._id, gmailId: { $in: messageIds } },
+		{ $addToSet: { labelIds: labelId } },
+	);
+
+	return { modified: result.modifiedCount ?? 0 };
+};
+
 type GmailApiProfile = {
 	emailAddress: string;
 	historyId: string;
