@@ -12,7 +12,7 @@ import {
 	ReloadOutlined,
 	TagOutlined,
 } from '@ant-design/icons';
-import { Menu, Input, Avatar, Typography, Button, ConfigProvider, theme, Dropdown } from 'antd';
+import { Menu, Input, Avatar, Typography, Button, ConfigProvider, theme, Dropdown, Grid } from 'antd';
 
 const { Text } = Typography;
 const defaultAvatar = 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix';
@@ -41,6 +41,8 @@ const Sidebar = ({
 	onSync,
 	syncing,
 }) => {
+	const screens = Grid.useBreakpoint();
+	const isDesktop = screens.lg;
 	const isAuthenticated = Boolean(user);
 
 	const handleAuthClick = () => {
@@ -142,11 +144,14 @@ const Sidebar = ({
 			<div
 				style={{
 					width: '100%',
-					height: '100vh',
+					minHeight: isDesktop ? '100%' : 'auto',
+					height: '100%',
 					background: '#141414',
 					display: 'flex',
 					flexDirection: 'column',
-					borderRight: '1px solid #303030',
+					border: '1px solid #303030',
+					borderRadius: isDesktop ? 16 : 12,
+					overflow: 'hidden',
 				}}
 			>
 				<div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>

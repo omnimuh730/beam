@@ -1,28 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Flex, Layout } from 'antd';
+import { Layout, Grid, Row, Col } from 'antd';
 
 import SideBar from './components/layout/Sidebar.jsx';
 import MailRow from './components/mail/MailRow.jsx';
 
-const { Sider, Content } = Layout;
-const contentStyle = {
-	textAlign: 'center',
-	height: '100%',
-	lineHeight: '120px',
-	color: '#fff',
-};
-const siderStyle = {
-	textAlign: 'center',
-	lineHeight: '100%',
-	color: '#fff',
-};
-const layoutStyle = {
-	borderRadius: 8,
-	height: '100vh',
-	overflow: 'hidden',
-	width: 'calc(100%)',
-	maxWidth: 'calc(100%)',
-};
+const { Content } = Layout;
 
 const SYSTEM_LABEL_MAP = {
 	sent: 'SENT',
@@ -169,7 +151,7 @@ const App = () => {
 		const hydrate = async () => {
 			const hasData = await loadMailboxData();
 			if (!hasData && !cancelled) {
-				syncMailbox({ forceFull: true }).catch(() => {});
+				syncMailbox({ forceFull: true }).catch(() => { });
 			}
 		};
 		hydrate();
@@ -203,10 +185,29 @@ const App = () => {
 		});
 	}, []);
 
+	const screens = Grid.useBreakpoint();
+	const padding = screens.md ? 24 : 12;
+	const gutter = screens.sm ? 16 : 12;
+	const sidebarSpans = { xs: 24, sm: 24, md: 8, lg: 7, xl: 6, xxl: 5 };
+	const contentSpans = { xs: 24, sm: 24, md: 16, lg: 17, xl: 18, xxl: 19 };
+
 	return (
-		<Flex gap="middle" wrap>
-			<Layout style={layoutStyle}>
-				<Sider width="225px" style={siderStyle}>
+		<Layout
+			style={{
+				minHeight: '100vh',
+				padding,
+				background: 'transparent',
+			}}
+		>
+			<Row
+				gutter={[gutter, gutter]}
+				align="stretch"
+				style={{
+					width: '100%',
+					margin: 0,
+				}}
+			>
+				<Col {...sidebarSpans} style={{ display: 'flex' }}>
 					<SideBar
 						user={user}
 						loadingUser={loadingUser}
@@ -218,9 +219,15 @@ const App = () => {
 						onLogin={handleLogin}
 						onLogout={handleLogout}
 					/>
-				</Sider>
-				<Layout>
-					<Content style={contentStyle}>
+				</Col>
+				<Col {...contentSpans} style={{ display: 'flex' }}>
+					<Content
+						style={{
+							width: '100%',
+							padding: 0,
+							background: 'transparent',
+						}}
+					>
 						<MailRow
 							user={user}
 							messages={messages}
@@ -235,9 +242,9 @@ const App = () => {
 							onRefresh={() => syncMailbox()}
 						/>
 					</Content>
-				</Layout>
-			</Layout>
-		</Flex>
+				</Col>
+			</Row>
+		</Layout>
 	);
 };
 

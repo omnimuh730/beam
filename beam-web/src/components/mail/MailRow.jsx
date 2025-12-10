@@ -27,6 +27,9 @@ import {
 	Spin,
 	Alert,
 	Button,
+	Row,
+	Col,
+	Grid,
 } from 'antd';
 
 const { Text, Title } = Typography;
@@ -90,12 +93,15 @@ const MailRow = ({
 	onRefresh,
 	onPageChange,
 }) => {
+	const screens = Grid.useBreakpoint();
+	const isDesktop = screens.lg;
 	const [selectedIds, setSelectedIds] = useState([]);
 	const [activeEmailId, setActiveEmailId] = useState(null);
 	const [hoveredId, setHoveredId] = useState(null);
 	const [detailCache, setDetailCache] = useState({});
 	const [detailLoadingId, setDetailLoadingId] = useState(null);
 	const [detailError, setDetailError] = useState(null);
+	const hasDetailPanel = Boolean(activeEmailId) && isDesktop;
 
 	const labelLookup = useMemo(() => {
 		const map = new Map();
@@ -298,6 +304,15 @@ const MailRow = ({
 		};
 	}, [activeEmailId, hydratedMessages]);
 
+	const listSpan = (() => {
+		if (!activeEmailId || !isDesktop) return 24;
+		if (screens.xxl) return 9;
+		if (screens.xl) return 10;
+		return 11;
+	})();
+	const detailSpan = activeEmailId && isDesktop ? 24 - listSpan : 24;
+	const verticalGutter = isDesktop ? 0 : 16;
+
 	return (
 		<ConfigProvider
 			theme={{
@@ -308,312 +323,343 @@ const MailRow = ({
 				},
 			}}
 		>
-			<div style={{ display: 'flex', height: '100vh', background: '#141414', color: '#e0e0e0', overflow: 'hidden' }}>
-				<div
+			<div
+				style={{
+					width: '100%',
+					minHeight: 'calc(100vh - 2rem)',
+					background: '#141414',
+					color: '#e0e0e0',
+					borderRadius: 20,
+					border: '1px solid #303030',
+					overflow: 'hidden',
+					display: 'flex',
+					flexDirection: 'column',
+				}}
+			>
+				<Row
+					gutter={[0, verticalGutter]}
+					wrap
+					align="stretch"
 					style={{
-						flex: activeEmailId ? '0 0 450px' : '1',
-						display: 'flex',
-						flexDirection: 'column',
-						borderRight: '1px solid #303030',
-						transition: 'all 0.3s cubic-bezier(0.2, 0, 0, 1)',
+						flex: 1,
+						width: '100%',
+						margin: 0,
 					}}
 				>
-					<div
+					<Col
+						span={listSpan}
 						style={{
-							padding: '12px 24px',
-							height: '60px',
 							display: 'flex',
-							alignItems: 'center',
-							justifyContent: 'space-between',
-							background: isSelectionMode ? '#1e1b2e' : 'transparent',
-							borderBottom: '1px solid #303030',
+							flexDirection: 'column',
+							borderRight: hasDetailPanel ? '1px solid #303030' : 'none',
+							minHeight: '100%',
 						}}
 					>
-						{isSelectionMode ? (
-							<>
-								<div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-									<Checkbox
-										checked={selectedIds.length > 0}
-										indeterminate={selectedIds.length > 0 && selectedIds.length < hydratedMessages.length}
-										onChange={selectAll}
-									/>
-									<Text style={{ color: '#8a83ff', fontWeight: 500 }}>{selectedIds.length} selected</Text>
-								</div>
-								<div style={{ display: 'flex', gap: '16px', fontSize: '18px', color: '#a0a0a0' }}>
-									<DeleteOutlined />
-									<MailOutlined />
-									<FolderOpenOutlined />
-									<MoreOutlined />
-								</div>
-							</>
-						) : (
-							<>
-								<div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-									<AppstoreOutlined style={{ fontSize: '16px' }} />
-									<Title level={5} style={{ margin: 0 }}>{headerTitle}</Title>
-									{user && (
-										<span
-											style={{
-												padding: '0 10px',
-												height: 22,
-												display: 'inline-flex',
-												alignItems: 'center',
-												fontSize: 12,
-												borderRadius: 999,
-												background: 'rgba(138, 131, 255, 0.2)',
-												color: '#c7c2ff',
-												boxShadow: '0 0 6px rgba(138, 131, 255, 0.6)',
-											}}
-										>
-											{user.displayName}
-										</span>
-									)}
-								</div>
-								<div style={{ display: 'flex', gap: '16px', color: '#a0a0a0', alignItems: 'center' }}>
-									<Tag style={{ background: '#262626', border: '1px solid #434343', margin: 0 }}>
-										<TagOutlined /> Auto label
-									</Tag>
-									<FilterOutlined />
-									<Tooltip title="Refresh Gmail">
-										<ReloadOutlined onClick={() => onRefresh?.()} style={{ cursor: 'pointer' }} spin={loading} />
-									</Tooltip>
-									<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-										<Text style={{ color: '#a0a0a0', fontSize: 12 }}>
-											{totalLabel ? `${viewRangeLabel} of ${totalLabel}` : '0 results'}
-										</Text>
-										<div style={{ display: 'flex', gap: 4 }}>
-											<Button
-												size="small"
-												type="text"
-												disabled={disablePrev || loading}
-												icon={<LeftOutlined />}
-												onClick={handlePrevPage}
-												style={{ color: disablePrev || loading ? '#555' : '#c9c9c9' }}
-											/>
-											<Button
-												size="small"
-												type="text"
-												disabled={disableNext || loading}
-												icon={<RightOutlined />}
-												onClick={handleNextPage}
-												style={{ color: disableNext || loading ? '#555' : '#c9c9c9' }}
-											/>
+						<div
+							style={{
+								padding: '12px 24px',
+								height: 60,
+								display: 'flex',
+								alignItems: 'center',
+								justifyContent: 'space-between',
+								background: isSelectionMode ? '#1e1b2e' : 'transparent',
+								borderBottom: '1px solid #303030',
+							}}
+						>
+							{isSelectionMode ? (
+								<>
+									<div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+										<Checkbox
+											checked={selectedIds.length > 0}
+											indeterminate={selectedIds.length > 0 && selectedIds.length < hydratedMessages.length}
+											onChange={selectAll}
+										/>
+										<Text style={{ color: '#8a83ff', fontWeight: 500 }}>{selectedIds.length} selected</Text>
+									</div>
+									<div style={{ display: 'flex', gap: '16px', fontSize: '18px', color: '#a0a0a0' }}>
+										<DeleteOutlined />
+										<MailOutlined />
+										<FolderOpenOutlined />
+										<MoreOutlined />
+									</div>
+								</>
+							) : (
+								<>
+									<div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+										<AppstoreOutlined style={{ fontSize: '16px' }} />
+										<Title level={5} style={{ margin: 0 }}>{headerTitle}</Title>
+										{user && (
+											<span
+												style={{
+													padding: '0 10px',
+													height: 22,
+													display: 'inline-flex',
+													alignItems: 'center',
+													fontSize: 12,
+													borderRadius: 999,
+													background: 'rgba(138, 131, 255, 0.2)',
+													color: '#c7c2ff',
+													boxShadow: '0 0 6px rgba(138, 131, 255, 0.6)',
+												}}
+											>
+												{user.displayName}
+											</span>
+										)}
+									</div>
+									<div style={{ display: 'flex', gap: '16px', color: '#a0a0a0', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+										<Tag style={{ background: '#262626', border: '1px solid #434343', margin: 0 }}>
+											<TagOutlined /> Auto label
+										</Tag>
+										<FilterOutlined />
+										<Tooltip title="Refresh Gmail">
+											<ReloadOutlined onClick={() => onRefresh?.()} style={{ cursor: 'pointer' }} spin={loading} />
+										</Tooltip>
+										<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+											<Text style={{ color: '#a0a0a0', fontSize: 12 }}>
+												{totalLabel ? `${viewRangeLabel} of ${totalLabel}` : '0 results'}
+											</Text>
+											<div style={{ display: 'flex', gap: 4 }}>
+												<Button
+													size="small"
+													type="text"
+													disabled={disablePrev || loading}
+													icon={<LeftOutlined />}
+													onClick={handlePrevPage}
+													style={{ color: disablePrev || loading ? '#555' : '#c9c9c9' }}
+												/>
+												<Button
+													size="small"
+													type="text"
+													disabled={disableNext || loading}
+													icon={<RightOutlined />}
+													onClick={handleNextPage}
+													style={{ color: disableNext || loading ? '#555' : '#c9c9c9' }}
+												/>
+											</div>
 										</div>
 									</div>
-								</div>
-							</>
-						)}
-					</div>
-
-					<div style={{ flex: 1, overflowY: 'auto', padding: '0 12px', position: 'relative' }}>
-						{error && (
-							<Alert
-								type="error"
-								message="Unable to fetch Gmail messages"
-								description={error}
-								showIcon
-								style={{ margin: '12px 16px', background: '#2a1215', borderColor: '#58181c' }}
-							/>
-						)}
-						{groupedMessages.length === 0 && !loading && !error && (
-							<Empty
-								description={(
-									<Text style={{ color: '#8c8c8c' }}>
-										{activeLabel
-											? `No conversations for "${activeLabel.name}" yet.`
-											: 'No Gmail messages cached yet. Try syncing.'}
-									</Text>
-								)}
-								image={Empty.PRESENTED_IMAGE_SIMPLE}
-								style={{ marginTop: 64 }}
-							/>
-						)}
-						{groupedMessages.map(group => (
-							<div key={group.name}>
-								<div
-									style={{
-										fontSize: '11px',
-										color: '#656c82',
-										letterSpacing: '0.1em',
-										textTransform: 'uppercase',
-										height: 40,
-										display: 'flex',
-										alignItems: 'center',
-										padding: '0 16px',
-										fontWeight: 600,
-										marginTop: 8,
-									}}
-								>
-									{group.name}
-								</div>
-
-								{group.items.map(item => {
-									const isSelected = selectedIds.includes(item.id);
-									const isHovered = hoveredId === item.id;
-									const isActive = activeEmailId === item.id;
-
-									return (
-										<div
-											key={item.id}
-											onMouseEnter={() => setHoveredId(item.id)}
-											onMouseLeave={() => setHoveredId(null)}
-											onClick={() => setActiveEmailId(item.id)}
-											style={{
-												display: 'flex',
-												alignItems: 'center',
-												padding: '0 16px',
-												margin: '0 0 2px 0',
-												height: 48,
-												cursor: 'pointer',
-												borderRadius: 8,
-												background: isSelected ? '#1e1b2e' : isHovered ? '#1f2129' : isActive ? '#262626' : 'transparent',
-												boxShadow: isSelected ? 'inset 3px 0 0 #8a83ff' : 'none',
-												transition: 'background 0.1s ease',
-												position: 'relative',
-												overflow: 'hidden',
-											}}
-										>
-											<div style={{ width: 28, display: 'flex', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-												{(isHovered || isSelected) ? (
-													<Checkbox checked={isSelected} onChange={(e) => toggleSelection(item.id, e)} />
-												) : null}
-											</div>
-
-											<div style={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: 0 }}>
-												<div style={{ width: 180, paddingRight: 16 }}>
-													<Text
-														strong={!item.read}
-														style={{
-															color: !item.read ? '#f7f9ff' : '#d6dae8',
-															fontSize: '13px',
-															whiteSpace: 'nowrap',
-															overflow: 'hidden',
-															textOverflow: 'ellipsis',
-														}}
-													>
-														{item.sender}
-													</Text>
-												</div>
-
-												<div style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
-													<Text strong={!item.read} ellipsis style={{ color: !item.read ? '#fff' : '#b0b0b0', fontSize: 13, marginRight: 8 }}>
-														{item.subject || '(No subject)'}
-													</Text>
-													<Text ellipsis style={{ color: '#666', fontSize: 13, flex: 1 }}>
-														{item.snippet || 'No preview available'}
-													</Text>
-												</div>
-											</div>
-
-											<div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 16 }}>
-												{item.tag && (
-													<Tag
-														bordered={false}
-														style={{
-															margin: 0,
-															background: item.tag.color,
-															color: '#fff',
-															fontSize: 11,
-															borderRadius: 10,
-														}}
-													>
-														{item.tag.name}
-													</Tag>
-												)}
-
-												{isHovered ? (
-													<div style={{ display: 'flex', gap: 12, color: '#888', minWidth: 60, justifyContent: 'flex-end' }}>
-														<DeleteOutlined />
-														<MailOutlined />
-														<ClockCircleOutlined />
-													</div>
-												) : (
-													<Text style={{ color: '#666', fontSize: 12, minWidth: 60, textAlign: 'right' }}>
-														{item.displayTime}
-													</Text>
-												)}
-											</div>
-										</div>
-									);
-								})}
-							</div>
-						))}
-						{loading && (
-							<div style={{ position: 'absolute', top: 12, right: 24 }}>
-								<Spin size="small" tip="Syncing Gmail..." />
-							</div>
-						)}
-					</div>
-				</div>
-
-				{activeEmailId && activeEmail && (
-					<div style={{ flex: '1', display: 'flex', flexDirection: 'column', background: '#1f1f1f' }}>
-						<div style={{ padding: '0 24px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #303030' }}>
-							<div style={{ display: 'flex', gap: '16px', color: '#a0a0a0' }}>
-								<Tooltip title="Close">
-									<ArrowLeftOutlined onClick={() => setActiveEmailId(null)} style={{ cursor: 'pointer', color: '#fff' }} />
-								</Tooltip>
-								<span style={{ borderLeft: '1px solid #434343' }} />
-								<FolderOpenOutlined />
-								<DeleteOutlined />
-								<MailOutlined />
-							</div>
-							<div style={{ display: 'flex', gap: '16px', color: '#a0a0a0' }}>
-								<PrinterOutlined />
-								<MoreOutlined />
-							</div>
+								</>
+							)}
 						</div>
 
-						<div style={{ padding: '40px', overflowY: 'auto' }}>
-							{detailError && (
+						<div style={{ flex: 1, overflowY: 'auto', padding: '0 12px', position: 'relative' }}>
+							{error && (
 								<Alert
 									type="error"
-									message="Unable to load email content"
-									description={detailError}
+									message="Unable to fetch Gmail messages"
+									description={error}
 									showIcon
-									style={{ marginBottom: 16 }}
+									style={{ margin: '12px 16px', background: '#2a1215', borderColor: '#58181c' }}
 								/>
 							)}
-							{detailLoadingId === activeEmailId && (
-								<div style={{ marginBottom: 16 }}>
-									<Spin size="small" tip="Loading email content..." />
+							{groupedMessages.length === 0 && !loading && !error && (
+								<Empty
+									description={(
+										<Text style={{ color: '#8c8c8c' }}>
+											{activeLabel
+												? `No conversations for "${activeLabel.name}" yet.`
+												: 'No Gmail messages cached yet. Try syncing.'}
+										</Text>
+									)}
+									image={Empty.PRESENTED_IMAGE_SIMPLE}
+									style={{ marginTop: 64 }}
+								/>
+							)}
+							{groupedMessages.map(group => (
+								<div key={group.name}>
+									<div
+										style={{
+											fontSize: '11px',
+											color: '#656c82',
+											letterSpacing: '0.1em',
+											textTransform: 'uppercase',
+											height: 40,
+											display: 'flex',
+											alignItems: 'center',
+											padding: '0 16px',
+											fontWeight: 600,
+											marginTop: 8,
+										}}
+									>
+										{group.name}
+									</div>
+
+									{group.items.map(item => {
+										const isSelected = selectedIds.includes(item.id);
+										const isHovered = hoveredId === item.id;
+										const isActive = activeEmailId === item.id;
+
+										return (
+											<div
+												key={item.id}
+												onMouseEnter={() => setHoveredId(item.id)}
+												onMouseLeave={() => setHoveredId(null)}
+												onClick={() => setActiveEmailId(item.id)}
+												style={{
+													display: 'flex',
+													alignItems: 'center',
+													padding: '0 16px',
+													margin: '0 0 2px 0',
+													height: 48,
+													cursor: 'pointer',
+													borderRadius: 8,
+													background: isSelected ? '#1e1b2e' : isHovered ? '#1f2129' : isActive ? '#262626' : 'transparent',
+													boxShadow: isSelected ? 'inset 3px 0 0 #8a83ff' : 'none',
+													transition: 'background 0.1s ease',
+													position: 'relative',
+													overflow: 'hidden',
+												}}
+											>
+												<div style={{ width: 28, display: 'flex', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+													{(isHovered || isSelected) ? (
+														<Checkbox checked={isSelected} onChange={(e) => toggleSelection(item.id, e)} />
+													) : null}
+												</div>
+
+												<div style={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: 0, gap: 12 }}>
+													<div style={{ width: 180, paddingRight: 16 }}>
+														<Text
+															strong={!item.read}
+															style={{
+																color: !item.read ? '#f7f9ff' : '#d6dae8',
+																fontSize: '13px',
+																whiteSpace: 'nowrap',
+																overflow: 'hidden',
+																textOverflow: 'ellipsis',
+															}}
+														>
+															{item.sender}
+														</Text>
+													</div>
+
+													<div style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+														<Text strong={!item.read} ellipsis style={{ color: !item.read ? '#fff' : '#b0b0b0', fontSize: 13, marginRight: 8 }}>
+															{item.subject || '(No subject)'}
+														</Text>
+														<Text ellipsis style={{ color: '#666', fontSize: 13, flex: 1 }}>
+															{item.snippet || 'No preview available'}
+														</Text>
+													</div>
+												</div>
+
+												<div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 16 }}>
+													{item.tag && (
+														<Tag
+															bordered={false}
+															style={{
+																margin: 0,
+																background: item.tag.color,
+																color: '#fff',
+																fontSize: 11,
+																borderRadius: 10,
+															}}
+														>
+															{item.tag.name}
+														</Tag>
+													)}
+
+													{isHovered ? (
+														<div style={{ display: 'flex', gap: 12, color: '#888', minWidth: 60, justifyContent: 'flex-end' }}>
+															<DeleteOutlined />
+															<MailOutlined />
+															<ClockCircleOutlined />
+														</div>
+													) : (
+														<Text style={{ color: '#666', fontSize: 12, minWidth: 60, textAlign: 'right' }}>
+															{item.displayTime}
+														</Text>
+													)}
+												</div>
+											</div>
+										);
+									})}
+								</div>
+							))}
+							{loading && (
+								<div style={{ position: 'absolute', top: 12, right: 24 }}>
+									<Spin size="small" tip="Syncing Gmail..." />
 								</div>
 							)}
-							<Title level={2} style={{ marginBottom: '16px' }}>{activeEmail.subject || '(No subject)'}</Title>
-
-							<div style={{ display: 'flex', gap: '8px', marginBottom: '32px' }}>
-								{(activeEmail.labelIds || []).map(labelId => {
-									const label = labelLookup.get(labelId);
-									if (!label || label.type === 'system') return null;
-									return (
-										<Tag key={labelId} bordered={false} style={{ background: label.color?.backgroundColor || '#303030', color: label.color?.textColor || '#d9d9d9' }}>
-											{label.name}
-										</Tag>
-									);
-								})}
-							</div>
-
-							<div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '24px' }}>
-								<Avatar size={48} style={{ backgroundColor: '#fff', color: '#000' }}>
-									{(activeEmail.sender || 'A').slice(0, 1)}
-								</Avatar>
-								<div>
-									<Text strong style={{ fontSize: '16px', display: 'block' }}>{activeEmail.sender}</Text>
-									<Text type="secondary" style={{ fontSize: '12px' }}>to me <MoreOutlined /></Text>
-								</div>
-								<div style={{ flex: 1 }} />
-								<div style={{ display: 'flex', gap: '12px', color: '#8c8c8c' }}>
-									<StarOutlined />
-									<Text type="secondary" style={{ fontSize: '12px' }}>
-										{formatPreviewTimestamp(activeEmail.date)}
-									</Text>
-								</div>
-							</div>
-
-							{renderActiveBody()}
 						</div>
-					</div>
-				)}
+					</Col>
+
+					{activeEmailId && activeEmail && (
+						<Col
+							span={isDesktop ? detailSpan : 24}
+							style={{
+								display: 'flex',
+								flexDirection: 'column',
+								background: '#1f1f1f',
+								minHeight: '100%',
+							}}
+						>
+							<div style={{ padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #303030' }}>
+								<div style={{ display: 'flex', gap: '16px', color: '#a0a0a0' }}>
+									<Tooltip title="Close">
+										<ArrowLeftOutlined onClick={() => setActiveEmailId(null)} style={{ cursor: 'pointer', color: '#fff' }} />
+									</Tooltip>
+									<span style={{ borderLeft: '1px solid #434343' }} />
+									<FolderOpenOutlined />
+									<DeleteOutlined />
+									<MailOutlined />
+								</div>
+								<div style={{ display: 'flex', gap: '16px', color: '#a0a0a0' }}>
+									<PrinterOutlined />
+									<MoreOutlined />
+								</div>
+							</div>
+
+							<div style={{ padding: screens.sm ? '32px 40px' : '24px', overflowY: 'auto', flex: 1 }}>
+								{detailError && (
+									<Alert
+										type="error"
+										message="Unable to load email content"
+										description={detailError}
+										showIcon
+										style={{ marginBottom: 16 }}
+									/>
+								)}
+								{detailLoadingId === activeEmailId && (
+									<div style={{ marginBottom: 16 }}>
+										<Spin size="small" tip="Loading email content..." />
+									</div>
+								)}
+								<Title level={2} style={{ marginBottom: '16px' }}>{activeEmail.subject || '(No subject)'}</Title>
+
+								<div style={{ display: 'flex', gap: '8px', marginBottom: '32px', flexWrap: 'wrap' }}>
+									{(activeEmail.labelIds || []).map(labelId => {
+										const label = labelLookup.get(labelId);
+										if (!label || label.type === 'system') return null;
+										return (
+											<Tag key={labelId} bordered={false} style={{ background: label.color?.backgroundColor || '#303030', color: label.color?.textColor || '#d9d9d9' }}>
+												{label.name}
+											</Tag>
+										);
+									})}
+								</div>
+
+								<div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+									<Avatar size={48} style={{ backgroundColor: '#fff', color: '#000' }}>
+										{(activeEmail.sender || 'A').slice(0, 1)}
+									</Avatar>
+									<div>
+										<Text strong style={{ fontSize: '16px', display: 'block' }}>{activeEmail.sender}</Text>
+										<Text type="secondary" style={{ fontSize: '12px' }}>to me <MoreOutlined /></Text>
+									</div>
+									<div style={{ flex: 1 }} />
+									<div style={{ display: 'flex', gap: '12px', color: '#8c8c8c', alignItems: 'center' }}>
+										<StarOutlined />
+										<Text type="secondary" style={{ fontSize: '12px' }}>
+											{formatPreviewTimestamp(activeEmail.date)}
+										</Text>
+									</div>
+								</div>
+
+								{renderActiveBody()}
+							</div>
+						</Col>
+					)}
+				</Row>
 			</div>
 		</ConfigProvider>
 	);
