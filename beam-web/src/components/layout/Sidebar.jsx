@@ -2,10 +2,6 @@ import React from 'react';
 import {
 	EditOutlined,
 	SearchOutlined,
-	InboxOutlined,
-	TagsOutlined,
-	CalendarOutlined,
-	PlusOutlined,
 	MailOutlined,
 	SendOutlined,
 	FileOutlined,
@@ -13,10 +9,8 @@ import {
 	DeleteOutlined,
 	SettingOutlined,
 	QuestionCircleOutlined,
-	AppstoreOutlined,
-	ContainerOutlined
 } from '@ant-design/icons';
-import { Menu, Input, Avatar, Typography, Button, ConfigProvider, theme } from 'antd';
+import { Menu, Input, Avatar, Typography, Button, ConfigProvider, theme, Dropdown } from 'antd';
 
 const { Text } = Typography;
 const defaultAvatar = 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix';
@@ -47,6 +41,19 @@ const Sidebar = ({ user, loadingUser, onLogin, onLogout }) => {
 		if (isAuthenticated) {
 			onLogout?.();
 		} else {
+			onLogin?.();
+		}
+	};
+
+	const dropdownItems = isAuthenticated
+		? [{ key: 'sign-out', label: 'Sign out', danger: true }]
+		: [{ key: 'sign-in', label: 'Sign in' }];
+
+	const handleDropdownClick = ({ key }) => {
+		if (key === 'sign-out') {
+			onLogout?.();
+		}
+		if (key === 'sign-in') {
 			onLogin?.();
 		}
 	};
@@ -82,42 +89,46 @@ const Sidebar = ({ user, loadingUser, onLogin, onLogout }) => {
 			>
 				{/* --- 1. HEADER (User Profile) --- */}
 				<div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-					<div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flex: 1 }}>
-						{console.log(user)}
-						<Avatar
-							src={user?.photo || defaultAvatar}
-							shape="square"
-						/>
-						<div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-							<Text
-								strong
-								style={{
-									color: '#fff',
-									padding: '2px 8px',
-									borderRadius: 999,
-								}}
-							>
-								{user?.displayName || 'Guest'}
-							</Text>
-							<Text style={{ color: '#8c8c8c', fontSize: 11 }}>
-								{user?.email || 'Sign in to link Gmail'}
-							</Text>
-						</div>
+					<div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+						<Dropdown menu={{ items: dropdownItems, onClick: handleDropdownClick }} placement="bottom">
+							<div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flex: 1 }}>
+								{/* The single child element of Dropdown is now clean */}
+								<Avatar
+									src={user?.photo || defaultAvatar}
+									shape="square"
+								/>
+								<div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+									<Text
+										strong
+										style={{
+											color: '#fff',
+											padding: '2px 8px',
+											borderRadius: 999,
+										}}
+									>
+										{user?.displayName || 'Guest'}
+									</Text>
+									<Text style={{ color: '#8c8c8c', fontSize: 11 }}>
+										{user?.email || 'Sign in to link Gmail'}
+									</Text>
+								</div>
+							</div>
+						</Dropdown>
+						{
+							!isAuthenticated &&
+							<div style={{ display: 'flex', gap: 8 }}>
+								<Button
+									type={isAuthenticated ? 'default' : 'primary'}
+									size="small"
+									loading={!isAuthenticated && loadingUser}
+									onClick={handleAuthClick}
+								>
+									Sign in
+								</Button>
+								<Button type="text" icon={<EditOutlined />} style={{ color: '#fff' }} />
+							</div>
+						}
 					</div>
-					{
-						!isAuthenticated &&
-						<div style={{ display: 'flex', gap: 8 }}>
-							<Button
-								type={isAuthenticated ? 'default' : 'primary'}
-								size="small"
-								loading={!isAuthenticated && loadingUser}
-								onClick={handleAuthClick}
-							>
-								'Sign in'
-							</Button>
-							<Button type="text" icon={<EditOutlined />} style={{ color: '#fff' }} />
-						</div>
-					}
 				</div>
 
 				{/* --- 2. SEARCH BAR --- */}
