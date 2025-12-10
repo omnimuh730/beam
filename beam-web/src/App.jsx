@@ -203,24 +203,44 @@ const App = () => {
 		});
 	}, []);
 
-	const handleApplyLabel = useCallback((labelId, targetIds = []) => {
+	const handleApplyLabel = useCallback(async (labelId, targetIds = []) => {
 		if (!labelId || !targetIds.length) return;
-		setMessages(prev =>
-			prev.map(message => {
-				if (!targetIds.includes(message.id)) {
-					return message;
-				}
-				const nextLabelIds = new Set(message.labelIds || []);
-				if (nextLabelIds.has(labelId)) {
-					return message;
-				}
-				nextLabelIds.add(labelId);
-				return {
-					...message,
-					labelIds: Array.from(nextLabelIds),
-				};
-			}),
-		);
+		try {
+			const response = await fetch('/api/gmail/messages/apply-label', {
+				method: 'POST',
+				credentials: 'include',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					labelId,
+					messageIds: targetIds,
+				}),
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to apply label');
+			}
+
+			setMessages(prev =>
+				prev.map(message => {
+					if (!targetIds.includes(message.id)) {
+						return message;
+					}
+					const nextLabelIds = new Set(message.labelIds || []);
+					if (nextLabelIds.has(labelId)) {
+						return message;
+					}
+					nextLabelIds.add(labelId);
+					return {
+						...message,
+						labelIds: Array.from(nextLabelIds),
+					};
+				}),
+			);
+		} catch (error) {
+			console.error('Unable to apply label', error);
+		}
 	}, []);
 
 	const screens = Grid.useBreakpoint();
