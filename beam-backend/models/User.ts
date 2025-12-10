@@ -1,4 +1,5 @@
-import { Schema, model, models, InferSchemaType } from "mongoose";
+import { Schema, model, models } from "mongoose";
+import type { InferSchemaType } from "mongoose";
 
 const userSchema = new Schema(
 	{
@@ -16,8 +17,6 @@ const userSchema = new Schema(
 		timestamps: true,
 	},
 );
-
-userSchema.index({ googleId: 1 }, { unique: true });
 
 export type UserDocument = InferSchemaType<typeof userSchema>;
 

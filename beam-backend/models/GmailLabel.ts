@@ -1,10 +1,5 @@
-import {
-	Schema,
-	model,
-	models,
-	InferSchemaType,
-	Types,
-} from "mongoose";
+import { Schema, model, models, Types } from "mongoose";
+import type { InferSchemaType } from "mongoose";
 
 const gmailLabelSchema = new Schema(
 	{
