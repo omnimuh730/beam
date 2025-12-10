@@ -11,8 +11,9 @@ import {
 	QuestionCircleOutlined,
 	ReloadOutlined,
 	TagOutlined,
+	StarFilled,
 } from '@ant-design/icons';
-import { Menu, Input, Avatar, Typography, Button, ConfigProvider, theme, Dropdown, Grid } from 'antd';
+import { Menu, Input, Avatar, Typography, Button, ConfigProvider, theme, Dropdown, Grid, Tree } from 'antd';
 
 const { Text } = Typography;
 const defaultAvatar = 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix';
@@ -44,6 +45,7 @@ const Sidebar = ({
 	const screens = Grid.useBreakpoint();
 	const isDesktop = screens.lg;
 	const isAuthenticated = Boolean(user);
+	const isLabelSelection = selectedKey?.startsWith('label-');
 
 	const handleAuthClick = () => {
 		if (isAuthenticated) {
@@ -66,62 +68,139 @@ const Sidebar = ({
 		}
 	};
 
-	const userLabelItems = useMemo(() => {
+	const filteredLabels = useMemo(() => {
+		const exclusion = '[notion]';
 		return (labels || [])
-			.filter(label => label.type !== 'system' || label.id === 'STARRED')
-			.map(label => ({
-				key: `label-${label.id}`,
-				icon: (
-					<span
-						style={{
-							width: 8,
-							height: 8,
-							borderRadius: '50%',
-							display: 'inline-block',
-							background: label.color?.backgroundColor || '#8a83ff',
-						}}
-					/>
-				),
-				label: (
-					<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-						<span style={{ color: '#d6dae8' }}>{label.name}</span>
-						<Text style={{ fontSize: 11, color: '#8c8c8c' }}>
-							{label.messagesUnread ?? 0}
-						</Text>
-					</div>
-				),
-			}));
+			.filter(label => label.id !== 'STARRED')
+			.filter(label => label.type !== 'system')
+			.filter(label => (label.name || '').trim().toLowerCase() !== exclusion);
 	}, [labels]);
 
+	const labelTreeData = useMemo(() => {
+		if (!filteredLabels.length) return [];
+
+		const nameMap = new Map(filteredLabels.map(label => [label.name, label]));
+		const nodeMap = new Map();
+		const roots = [];
+
+		const ensureNode = path => {
+			let node = nodeMap.get(path);
+			if (node) return node;
+			const segments = path.split('/');
+			const segment = segments[segments.length - 1];
+			node = {
+				path,
+				segment,
+				label: nameMap.get(path) || null,
+				children: [],
+			};
+			nodeMap.set(path, node);
+
+			if (segments.length > 1) {
+				const parentPath = segments.slice(0, -1).join('/');
+				const parentNode = ensureNode(parentPath);
+				if (!parentNode.children.some(child => child.path === path)) {
+					parentNode.children.push(node);
+				}
+			} else {
+				roots.push(node);
+			}
+
+			return node;
+		};
+
+		filteredLabels.forEach(label => ensureNode(label.name));
+
+		const sortNodes = nodes => {
+			nodes.sort((a, b) => a.segment.localeCompare(b.segment, undefined, { sensitivity: 'base' }));
+			nodes.forEach(child => sortNodes(child.children));
+		};
+		sortNodes(roots);
+
+		const buildTreeNodes = nodes =>
+			nodes.map(node => {
+				const label = node.label;
+				const unread = label?.messagesUnread ?? 0;
+				const color = label?.color?.backgroundColor || '#8a83ff';
+				const key = label ? `label-${label.id}` : `path-${node.path}`;
+
+				return {
+					key,
+					labelId: label?.id,
+					selectable: Boolean(label),
+					title: (
+						<div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
+							<span
+								style={{
+									width: 10,
+									height: 10,
+									borderRadius: '50%',
+									background: label ? color : '#383838',
+									display: 'inline-flex',
+									flexShrink: 0,
+								}}
+							/>
+							<Text
+								style={{
+									color: '#d6dae8',
+									fontSize: 13,
+									flex: 1,
+									overflow: 'hidden',
+									whiteSpace: 'nowrap',
+									textOverflow: 'ellipsis',
+								}}
+							>
+								{node.segment}
+							</Text>
+							<Text style={{ fontSize: 11, color: '#8c8c8c' }}>
+								{unread}
+							</Text>
+						</div>
+					),
+					children: buildTreeNodes(node.children),
+				};
+			});
+
+		return buildTreeNodes(roots);
+	}, [filteredLabels]);
+
 	const menuItems = useMemo(() => {
-		const items = [
+		return [
 			{
 				type: 'group',
 				label: 'Mail',
 				children: coreMailItems,
 			},
+			{ type: 'divider' },
+			...utilityItems,
 		];
-
-		if (userLabelItems.length) {
-			items.push({
-				type: 'group',
-				label: 'Labels',
-				children: userLabelItems,
-			});
-		}
-
-		items.push({ type: 'divider' });
-		items.push(...utilityItems);
-
-		return items;
-	}, [userLabelItems]);
+	}, []);
 
 	const labelGraph = useMemo(() => {
-		return (labels || [])
-			.filter(label => label.type !== 'system')
+		return [...filteredLabels]
 			.sort((a, b) => (b.messagesTotal ?? 0) - (a.messagesTotal ?? 0))
 			.slice(0, 5);
-	}, [labels]);
+	}, [filteredLabels]);
+
+	const starredLabel = useMemo(
+		() => (labels || []).find(label => label.id === 'STARRED'),
+		[labels],
+	);
+
+	const handleLabelSelect = (_keys, info) => {
+		const labelId = info?.node?.labelId;
+		if (labelId) {
+			onMenuSelect?.(`label-${labelId}`);
+		}
+	};
+
+	const handleStarredClick = () => {
+		onMenuSelect?.('label-STARRED');
+	};
+
+	const menuSelectedKeys = isLabelSelection ? [] : [selectedKey];
+	const labelSelectedKeys = isLabelSelection ? [selectedKey] : [];
+	const isStarredSelected = selectedKey === 'label-STARRED';
 
 	return (
 		<ConfigProvider
@@ -137,8 +216,13 @@ const Sidebar = ({
 						itemSelectedColor: '#ffffff',
 						itemHeight: 40,
 						itemMarginInline: 8,
-					}
-				}
+					},
+					Tree: {
+						colorBgContainer: 'transparent',
+						nodeSelectedBg: '#2a2a2a',
+						nodeHoverBg: '#1e1e1e',
+					},
+				},
 			}}
 		>
 			<div
@@ -215,48 +299,99 @@ const Sidebar = ({
 				<div style={{ flex: 1, overflowY: 'auto' }}>
 					<Menu
 						mode="inline"
-						selectedKeys={[selectedKey]}
+						selectedKeys={menuSelectedKeys}
 						onClick={({ key }) => onMenuSelect?.(key)}
 						style={{ borderRight: 0, background: 'transparent' }}
 						items={menuItems}
 					/>
-					<div style={{ padding: '0 16px 16px' }}>
-						<div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-							<TagOutlined style={{ color: '#8c8c8c' }} />
-							<Text style={{ color: '#8c8c8c', fontSize: 12, letterSpacing: '0.05em' }}>LABEL GRAPH</Text>
-						</div>
-						{labelGraph.length ? (
-							labelGraph.map(label => {
-								const total = label.messagesTotal ?? 0;
-								const unread = label.messagesUnread ?? 0;
-								const percent = total ? Math.min(100, Math.round((unread / total) * 100)) : unread ? 100 : 0;
-								const color = label.color?.backgroundColor || '#8a83ff';
-								return (
-									<div key={label.id} style={{ marginBottom: 8 }}>
-										<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-											<span style={{ color: '#d6dae8', fontSize: 12 }}>{label.name}</span>
-											<Text style={{ fontSize: 11, color: '#8c8c8c' }}>
-												{unread}
-												{total ? `/${total}` : ''}
-											</Text>
-										</div>
-										<div style={{ height: 6, borderRadius: 999, background: '#1f1f1f', marginTop: 4 }}>
-											<div
-												style={{
-													width: `${percent}%`,
-													height: '100%',
-													background: color,
-													borderRadius: 999,
-													transition: 'width 0.3s ease',
-												}}
-											/>
-										</div>
-									</div>
-								);
-							})
-						) : (
-							<Text style={{ color: '#666', fontSize: 12 }}>Labels will appear here after syncing.</Text>
+					<div style={{ padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+						{starredLabel && (
+							<button
+								type="button"
+								onClick={handleStarredClick}
+								style={{
+									border: '1px solid #333',
+									width: '100%',
+									borderRadius: 10,
+									padding: '10px 12px',
+									background: isStarredSelected ? '#2a2a2a' : 'transparent',
+									display: 'flex',
+									alignItems: 'center',
+									justifyContent: 'space-between',
+									cursor: 'pointer',
+								}}
+							>
+								<span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+									<StarFilled style={{ color: '#fadb14', fontSize: 18 }} />
+									<Text style={{ color: '#f5f5f5', fontWeight: 500 }}>Starred</Text>
+								</span>
+								<Text style={{ color: '#8c8c8c', fontSize: 12 }}>
+									{starredLabel.messagesUnread ?? 0}
+								</Text>
+							</button>
 						)}
+
+						<div>
+							<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+								<Text style={{ color: '#8c8c8c', fontSize: 12, letterSpacing: '0.08em' }}>LABELS</Text>
+								<Text style={{ color: '#555', fontSize: 11 }}>{filteredLabels.length}</Text>
+							</div>
+							{labelTreeData.length ? (
+								<Tree
+									showLine={{ showLeafIcon: false }}
+									blockNode
+									defaultExpandAll
+									treeData={labelTreeData}
+									selectedKeys={labelSelectedKeys}
+									onSelect={handleLabelSelect}
+									style={{
+										background: 'transparent',
+										color: '#d6dae8',
+									}}
+								/>
+							) : (
+								<Text style={{ color: '#666', fontSize: 12 }}>Labels will appear here after syncing.</Text>
+							)}
+						</div>
+
+						<div>
+							<div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+								<TagOutlined style={{ color: '#8c8c8c' }} />
+								<Text style={{ color: '#8c8c8c', fontSize: 12, letterSpacing: '0.05em' }}>LABEL GRAPH</Text>
+							</div>
+							{labelGraph.length ? (
+								labelGraph.map(label => {
+									const total = label.messagesTotal ?? 0;
+									const unread = label.messagesUnread ?? 0;
+									const percent = total ? Math.min(100, Math.round((unread / total) * 100)) : unread ? 100 : 0;
+									const color = label.color?.backgroundColor || '#8a83ff';
+									return (
+										<div key={label.id} style={{ marginBottom: 8 }}>
+											<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+												<span style={{ color: '#d6dae8', fontSize: 12 }}>{label.name}</span>
+												<Text style={{ fontSize: 11, color: '#8c8c8c' }}>
+													{unread}
+													{total ? `/${total}` : ''}
+												</Text>
+											</div>
+											<div style={{ height: 6, borderRadius: 999, background: '#1f1f1f', marginTop: 4 }}>
+												<div
+													style={{
+														width: `${percent}%`,
+														height: '100%',
+														background: color,
+														borderRadius: 999,
+														transition: 'width 0.3s ease',
+													}}
+												/>
+											</div>
+										</div>
+									);
+								})
+							) : (
+								<Text style={{ color: '#666', fontSize: 12 }}>Labels will appear here after syncing.</Text>
+							)}
+						</div>
 					</div>
 				</div>
 
