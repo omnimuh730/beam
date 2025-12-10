@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import { FilterQuery, Types } from "mongoose";
+import { Types } from "mongoose";
+import type { FilterQuery } from "mongoose";
 import { GmailLabelModel } from "../models/GmailLabel";
 import {
 	GmailMessageModel,
@@ -64,13 +65,13 @@ class GmailApiError extends Error {
 	}
 }
 
-const urlSafeDecode = (data?: string) => {
+export const urlSafeDecode = (data?: string) => {
 	if (!data) return undefined;
 	const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
 	return Buffer.from(normalized, "base64").toString("utf-8");
 };
 
-const pickHeader = (
+export const pickHeader = (
 	headers: Array<{ name: string; value: string }> | undefined,
 	target: string,
 ) => {
@@ -81,14 +82,8 @@ const pickHeader = (
 	)?.value;
 };
 
-const extractBodies = (
-	payload:
-		| {
-				mimeType?: string;
-				body?: { size?: number; data?: string };
-				parts?: any[];
-		  }
-		| undefined,
+export const extractBodies = (
+	payload?: GmailApiMessage["payload"],
 ): { plainBody?: string; htmlBody?: string } => {
 	if (!payload) return {};
 	const { mimeType, body, parts } = payload;
@@ -117,6 +112,12 @@ const extractBodies = (
 	}
 
 	return result;
+};
+
+type OAuthRefreshResponse = {
+	access_token: string;
+	expires_in: number;
+	refresh_token?: string;
 };
 
 const ensureAccessToken = async (user: UserWithTokens) => {
@@ -154,7 +155,7 @@ const ensureAccessToken = async (user: UserWithTokens) => {
 		);
 	}
 
-	const payload = await response.json();
+	const payload = (await response.json()) as OAuthRefreshResponse;
 	user.accessToken = payload.access_token;
 	user.tokenExpiry = new Date(Date.now() + payload.expires_in * 1000);
 	if (payload.refresh_token) {
@@ -210,7 +211,7 @@ const gmailRequest = async <T>(
 	return response.json() as Promise<T>;
 };
 
-const removeUndefined = <T extends Record<string, unknown>>(obj: T) => {
+export const removeUndefined = <T extends Record<string, unknown>>(obj: T) => {
 	return Object.fromEntries(
 		Object.entries(obj).filter(([, value]) => value !== undefined),
 	) as Partial<T>;
@@ -245,12 +246,15 @@ const upsertMessage = async (
 		sizeEstimate: message.sizeEstimate,
 		plainBody,
 		htmlBody,
-		headers: headers?.reduce<Record<string, string>>((acc, header) => {
-			if (header.name && header.value) {
-				acc[header.name] = header.value;
-			}
-			return acc;
-		}, {}),
+		headers:
+			headers && headers.length
+				? headers.reduce<Map<string, string>>((acc, header) => {
+						if (header.name && header.value) {
+							acc.set(header.name, header.value);
+						}
+						return acc;
+				  }, new Map())
+				: undefined,
 		lastSyncedAt: new Date(),
 	};
 

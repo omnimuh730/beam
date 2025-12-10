@@ -59,11 +59,21 @@ const MONGO_URI =
 	process.env.MONGO_URI || "mongodb://127.0.0.1:27017/beam";
 
 const ensureAuthenticated: RequestHandler = (req, res, next) => {
-	if (req.isAuthenticated()) {
+	if (req.isAuthenticated() && req.user) {
 		return next();
 	}
 	res.status(401).json({ error: "Not authenticated" });
 };
+
+function assertAuthenticatedUser(
+	req: express.Request,
+): asserts req is express.Request & { user: Express.User } {
+	if (!req.user) {
+		throw new Error(
+			"Authenticated request is missing the user payload from session",
+		);
+	}
+}
 
 const serializeMessage = (message: {
 	gmailId: string;
@@ -254,6 +264,7 @@ app.post("/api/auth/logout", (req, res, next) => {
 
 app.post("/api/gmail/sync", ensureAuthenticated, async (req, res, next) => {
 	try {
+		assertAuthenticatedUser(req);
 		const summary = await syncMailboxForUser(req.user.id, {
 			forceFull: req.body?.mode === "full",
 		});
@@ -266,6 +277,7 @@ app.post("/api/gmail/sync", ensureAuthenticated, async (req, res, next) => {
 
 app.get("/api/gmail/messages", ensureAuthenticated, async (req, res, next) => {
 	try {
+		assertAuthenticatedUser(req);
 		const limit = Math.min(
 			Number.parseInt(String(req.query.limit ?? "50"), 10) || 50,
 			200,
@@ -295,7 +307,14 @@ app.get(
 	ensureAuthenticated,
 	async (req, res, next) => {
 		try {
-			const message = await getMessageWithBody(req.user.id, req.params.id);
+			assertAuthenticatedUser(req);
+			const messageId =
+				typeof req.params.id === "string" ? req.params.id : undefined;
+			if (!messageId) {
+				res.status(400).json({ error: "message id is required" });
+				return;
+			}
+			const message = await getMessageWithBody(req.user.id, messageId);
 			if (!message) {
 				res.status(404).json({ error: "Message not found" });
 				return;
@@ -309,6 +328,7 @@ app.get(
 
 app.get("/api/gmail/labels", ensureAuthenticated, async (req, res, next) => {
 	try {
+		assertAuthenticatedUser(req);
 		const labels = await listStoredLabels(req.user.id);
 		const payload = labels.map(label => ({
 			id: label.labelId,
@@ -332,6 +352,7 @@ app.post(
 	ensureAuthenticated,
 	async (req, res, next) => {
 		try {
+			assertAuthenticatedUser(req);
 			const { labelId, messageIds } = req.body ?? {};
 			if (
 				typeof labelId !== "string" ||
@@ -372,6 +393,7 @@ app.get(
 	ensureAuthenticated,
 	async (req, res, next) => {
 		try {
+			assertAuthenticatedUser(req);
 			const stats = await getLabelUsageStats(req.user.id);
 			res.json({ stats });
 		} catch (error) {

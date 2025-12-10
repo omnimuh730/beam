@@ -6,7 +6,8 @@
 	"scripts": {
 		"start": "bun run index.ts",
 		"dev": "bun --watch index.ts",
-		"test": "bun test",
+		"typecheck": "bunx tsc --noEmit",
+		"test": "bun run typecheck && bun test",
 		"test:watch": "bun test --watch"
 	},
 	"devDependencies": {
