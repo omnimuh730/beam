@@ -5,7 +5,9 @@
 	"private": true,
 	"scripts": {
 		"start": "bun run index.ts",
-		"dev": "bun --watch index.ts"
+		"dev": "bun --watch index.ts",
+		"test": "bun test",
+		"test:watch": "bun test --watch"
 	},
 	"devDependencies": {
 		"@types/bun": "latest",
@@ -19,6 +21,7 @@
 	},
 	"dependencies": {
 		"@types/cors": "^2.8.19",
+		"@types/mongoose": "^5.11.97",
 		"cors": "^2.8.5",
 		"dotenv": "^17.2.3",
 		"express": "^5.2.1",
