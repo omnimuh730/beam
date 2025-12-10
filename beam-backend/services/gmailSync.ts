@@ -1,6 +1,5 @@
 import { Buffer } from "node:buffer";
 import { Types } from "mongoose";
-import type { FilterQuery } from "mongoose";
 import { GmailLabelModel } from "../models/GmailLabel";
 import {
 	GmailMessageModel,
@@ -266,7 +265,7 @@ const upsertMessage = async (
 	}
 
 	await GmailMessageModel.findOneAndUpdate(
-		{ user: user._id, gmailId: message.id } as FilterQuery<GmailMessageDocument>,
+		{ user: user._id, gmailId: message.id },
 		{ $set: updateDoc },
 		{ upsert: true, new: true, setDefaultsOnInsert: true },
 	);
@@ -644,7 +643,7 @@ export const listStoredMessages = async (
 	userId: string,
 	{ limit, offset = 0, labelId }: ListMessagesOptions,
 ) => {
-	const criteria: FilterQuery<GmailMessageDocument> = {
+	const criteria: { user: string; labelIds?: string } = {
 		user: userId,
 	};
 

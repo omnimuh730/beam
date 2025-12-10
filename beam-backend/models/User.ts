@@ -18,8 +18,6 @@ const userSchema = new Schema(
 	},
 );
 
-userSchema.index({ googleId: 1 }, { unique: true });
-
 export type UserDocument = InferSchemaType<typeof userSchema>;
 
 export const UserModel = models.User || model("User", userSchema);
