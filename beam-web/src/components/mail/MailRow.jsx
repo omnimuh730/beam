@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
 	StarOutlined,
 	DeleteOutlined,
@@ -12,93 +12,153 @@ import {
 	PrinterOutlined,
 	ClockCircleOutlined,
 	FolderOpenOutlined,
-	TagOutlined
+	TagOutlined,
 } from '@ant-design/icons';
-import { Avatar, Typography, Tag, ConfigProvider, theme, Checkbox, Tooltip } from 'antd';
+import {
+	Avatar,
+	Typography,
+	Tag,
+	ConfigProvider,
+	theme,
+	Checkbox,
+	Tooltip,
+	Empty,
+	Spin,
+	Alert,
+} from 'antd';
 
 const { Text, Title, Paragraph } = Typography;
 
-// --- MOCK DATA ---
-const initialData = [
-	{
-		id: '1',
-		group: 'Today',
-		sender: 'Woven',
-		subject: 'Feedback on your LeoTech work simulation',
-		snippet: 'Hi Terry, Thanks for making time to go through our Backend Engineer...',
-		tag: 'Application',
-		time: '12:24 AM',
-		read: true,
-	},
-	{
-		id: '2',
-		group: 'Today',
-		sender: 'NBCUniversal',
-		subject: 'Thank You For Your Interest in NBCUniversal!',
-		snippet: 'Hi Terry, Thanks for your interest in NBCUniversal. We really appreciate...',
-		tag: 'Application',
-		time: '12:04 AM',
-		read: true,
-	},
-	{
-		id: '3',
-		group: 'Yesterday',
-		sender: 'no-reply@asana.com',
-		subject: 'Thank you for your application to Asana!',
-		snippet: 'Hi Terry, Thanks for your interest in being a part of the Asana team...',
-		tag: 'Application',
-		time: 'Dec 7',
-		read: false,
-	},
-	{
-		id: '4',
-		group: 'Yesterday',
-		sender: 'The Global Talent Team',
-		subject: 'Your experience at Neo4j',
-		snippet: 'Email not showing correctly? Click here. Dear Terry, At Neo4j we aim...',
-		tag: 'Application',
-		time: 'Dec 7',
-		read: true,
-		avatar: 'https://dist.neo4j.com/wp-content/uploads/20210423062510/neo4j-logo-2020-1.png'
-	},
-	{
-		id: '5',
-		group: 'Yesterday',
-		sender: 'Google',
-		subject: 'Security alert',
-		snippet: 'You allowed Notion Mail access to some of your Google Account data...',
-		tag: null,
-		time: 'Dec 7',
-		read: true,
-	},
-];
+const isSameDay = (a, b) =>
+	a &&
+	b &&
+	a.getFullYear() === b.getFullYear() &&
+	a.getMonth() === b.getMonth() &&
+	a.getDate() === b.getDate();
 
-const MailRow = ({ user }) => {
+const formatGroupLabel = date => {
+	if (!date) return 'No date';
+	const today = new Date();
+	const yesterday = new Date();
+	yesterday.setDate(today.getDate() - 1);
+	if (isSameDay(date, today)) return 'Today';
+	if (isSameDay(date, yesterday)) return 'Yesterday';
+	return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+
+const formatListTime = date => {
+	if (!date) return '—';
+	const today = new Date();
+	if (isSameDay(date, today)) {
+		return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+	}
+	return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+
+const formatPreviewTimestamp = date =>
+	date
+		? date.toLocaleString(undefined, {
+			weekday: 'short',
+			month: 'short',
+			day: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit',
+		})
+		: '';
+
+const extractSender = header => {
+	if (!header) return 'Unknown sender';
+	const match = header.match(/"?(.*?)"?\s*<(.+?)>/);
+	if (match && match[1]) {
+		return match[1];
+	}
+	return header.replace(/<.*?>/g, '').trim();
+};
+
+const MailRow = ({ user, messages = [], labels = [], loading = false, error = null, onRefresh }) => {
 	const [selectedIds, setSelectedIds] = useState([]);
 	const [activeEmailId, setActiveEmailId] = useState(null);
 	const [hoveredId, setHoveredId] = useState(null);
 
-	const activeEmail = initialData.find(e => e.id === activeEmailId);
+	const labelLookup = useMemo(() => {
+		const map = new Map();
+		(labels || []).forEach(label => map.set(label.id, label));
+		return map;
+	}, [labels]);
+
+	const preparedMessages = useMemo(() => {
+		return (messages || [])
+			.map(message => {
+				const date = message.internalDate ? new Date(message.internalDate) : null;
+				const userLabel = (message.labelIds || [])
+					.map(id => labelLookup.get(id))
+					.find(label => label && label.type !== 'system');
+
+				return {
+					...message,
+					date,
+					sender: extractSender(message.from),
+					group: formatGroupLabel(date),
+					displayTime: formatListTime(date),
+					read: !(message.labelIds || []).includes('UNREAD'),
+					tag: userLabel
+						? {
+							name: userLabel.name,
+							color: userLabel.color?.backgroundColor || '#2b2640',
+						}
+						: null,
+					snippet: message.snippet || message.plainBody?.slice(0, 120),
+				};
+			})
+			.sort((a, b) => {
+				const timeA = a.date ? a.date.getTime() : 0;
+				const timeB = b.date ? b.date.getTime() : 0;
+				return timeB - timeA;
+			});
+	}, [messages, labelLookup]);
+
+	const groupedMessages = useMemo(() => {
+		const groups = [];
+		const map = new Map();
+		preparedMessages.forEach(message => {
+			if (!map.has(message.group)) {
+				const bucket = [];
+				map.set(message.group, bucket);
+				groups.push({ name: message.group, items: bucket });
+			}
+			map.get(message.group).push(message);
+		});
+		return groups;
+	}, [preparedMessages]);
+
+	useEffect(() => {
+		setSelectedIds(ids => ids.filter(id => preparedMessages.some(msg => msg.id === id)));
+		if (activeEmailId && !preparedMessages.some(msg => msg.id === activeEmailId)) {
+			setActiveEmailId(null);
+		}
+	}, [preparedMessages, activeEmailId]);
+
+	const activeEmail = preparedMessages.find(msg => msg.id === activeEmailId);
 	const isSelectionMode = selectedIds.length > 0;
 
 	const toggleSelection = (id, e) => {
 		e.stopPropagation();
-		if (selectedIds.includes(id)) {
-			setSelectedIds(selectedIds.filter(i => i !== id));
-		} else {
-			setSelectedIds([...selectedIds, id]);
-		}
+		setSelectedIds(prev => (prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]));
 	};
 
 	const selectAll = () => {
-		if (selectedIds.length === initialData.length) setSelectedIds([]);
-		else setSelectedIds(initialData.map(e => e.id));
+		if (selectedIds.length === preparedMessages.length) setSelectedIds([]);
+		else setSelectedIds(preparedMessages.map(e => e.id));
 	};
 
-	const groupedData = initialData.reduce((acc, item) => {
-		(acc[item.group] = acc[item.group] || []).push(item);
-		return acc;
-	}, {});
+	const renderMessageBody = body => {
+		if (!body) return null;
+		return body.split('\n').map((line, idx) => (
+			<Paragraph key={`${line}-${idx}`} style={{ color: '#d9d9d9', marginBottom: 12 }}>
+				{line}
+			</Paragraph>
+		));
+	};
 
 	return (
 		<ConfigProvider
@@ -111,32 +171,32 @@ const MailRow = ({ user }) => {
 			}}
 		>
 			<div style={{ display: 'flex', height: '100vh', background: '#141414', color: '#e0e0e0', overflow: 'hidden' }}>
-
-				{/* --- LEFT PANEL --- */}
-				<div style={{
-					flex: activeEmailId ? '0 0 450px' : '1',
-					display: 'flex',
-					flexDirection: 'column',
-					borderRight: '1px solid #303030',
-					transition: 'all 0.3s cubic-bezier(0.2, 0, 0, 1)'
-				}}>
-
-					{/* HEADER */}
-					<div style={{
-						padding: '12px 24px',
-						height: '60px',
+				<div
+					style={{
+						flex: activeEmailId ? '0 0 450px' : '1',
 						display: 'flex',
-						alignItems: 'center',
-						justifyContent: 'space-between',
-						background: isSelectionMode ? '#1e1b2e' : 'transparent',
-						borderBottom: '1px solid #303030'
-					}}>
+						flexDirection: 'column',
+						borderRight: '1px solid #303030',
+						transition: 'all 0.3s cubic-bezier(0.2, 0, 0, 1)',
+					}}
+				>
+					<div
+						style={{
+							padding: '12px 24px',
+							height: '60px',
+							display: 'flex',
+							alignItems: 'center',
+							justifyContent: 'space-between',
+							background: isSelectionMode ? '#1e1b2e' : 'transparent',
+							borderBottom: '1px solid #303030',
+						}}
+					>
 						{isSelectionMode ? (
 							<>
 								<div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
 									<Checkbox
 										checked={selectedIds.length > 0}
-										indeterminate={selectedIds.length > 0 && selectedIds.length < initialData.length}
+										indeterminate={selectedIds.length > 0 && selectedIds.length < preparedMessages.length}
 										onChange={selectAll}
 									/>
 									<Text style={{ color: '#8a83ff', fontWeight: 500 }}>{selectedIds.length} selected</Text>
@@ -149,51 +209,78 @@ const MailRow = ({ user }) => {
 								</div>
 							</>
 						) : (
-							// DEFAULT HEADER
 							<>
 								<div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
 									<AppstoreOutlined style={{ fontSize: '16px' }} />
 									<Title level={5} style={{ margin: 0 }}>All Mail</Title>
 									{user && (
-										<span style={{
-											padding: '0 10px',
-											height: 22,
-											display: 'inline-flex',
-											alignItems: 'center',
-											fontSize: 12,
-											borderRadius: 999,
-											background: 'rgba(138, 131, 255, 0.2)',
-											color: '#c7c2ff',
-											boxShadow: '0 0 6px rgba(138, 131, 255, 0.6)'
-										}}>
+										<span
+											style={{
+												padding: '0 10px',
+												height: 22,
+												display: 'inline-flex',
+												alignItems: 'center',
+												fontSize: 12,
+												borderRadius: 999,
+												background: 'rgba(138, 131, 255, 0.2)',
+												color: '#c7c2ff',
+												boxShadow: '0 0 6px rgba(138, 131, 255, 0.6)',
+											}}
+										>
 											{user.displayName}
 										</span>
 									)}
 								</div>
-								<div style={{ display: 'flex', gap: '16px', color: '#a0a0a0' }}>
-									<Tag style={{ background: '#262626', border: '1px solid #434343' }}>
+								<div style={{ display: 'flex', gap: '16px', color: '#a0a0a0', alignItems: 'center' }}>
+									<Tag style={{ background: '#262626', border: '1px solid #434343', margin: 0 }}>
 										<TagOutlined /> Auto label
 									</Tag>
 									<FilterOutlined />
-									<ReloadOutlined />
+									<Tooltip title="Refresh Gmail">
+										<ReloadOutlined onClick={() => onRefresh?.()} style={{ cursor: 'pointer' }} spin={loading} />
+									</Tooltip>
 								</div>
 							</>
 						)}
 					</div>
 
-					{/* LIST */}
-					<div style={{ flex: 1, overflowY: 'auto', padding: '0 12px' }}>
-						{Object.keys(groupedData).map(group => (
-							<div key={group}>
-								<div style={{
-									fontSize: '11px', color: '#656c82', letterSpacing: '0.1em',
-									textTransform: 'uppercase', height: 40, display: 'flex', alignItems: 'center',
-									padding: '0 16px', fontWeight: 600, marginTop: 8
-								}}>
-									{group}
+					<div style={{ flex: 1, overflowY: 'auto', padding: '0 12px', position: 'relative' }}>
+						{error && (
+							<Alert
+								type="error"
+								message="Unable to fetch Gmail messages"
+								description={error}
+								showIcon
+								style={{ margin: '12px 16px', background: '#2a1215', borderColor: '#58181c' }}
+							/>
+						)}
+						{groupedMessages.length === 0 && !loading && !error && (
+							<Empty
+								description={<Text style={{ color: '#8c8c8c' }}>No Gmail messages cached yet. Try syncing.</Text>}
+								image={Empty.PRESENTED_IMAGE_SIMPLE}
+								style={{ marginTop: 64 }}
+							/>
+						)}
+						{groupedMessages.map(group => (
+							<div key={group.name}>
+								<div
+									style={{
+										fontSize: '11px',
+										color: '#656c82',
+										letterSpacing: '0.1em',
+										textTransform: 'uppercase',
+										height: 40,
+										display: 'flex',
+										alignItems: 'center',
+										padding: '0 16px',
+										fontWeight: 600,
+										marginTop: 8,
+									}}
+								>
+									{group.name}
 								</div>
 
-								{groupedData[group].map(item => {
+								{group.items.map(item => {
 									const isSelected = selectedIds.includes(item.id);
 									const isHovered = hoveredId === item.id;
 									const isActive = activeEmailId === item.id;
@@ -207,29 +294,25 @@ const MailRow = ({ user }) => {
 											style={{
 												display: 'flex',
 												alignItems: 'center',
-												padding: '0 16px', // Internal padding
-												margin: '0 0 2px 0', // Vertical gap between items
-												height: 40, // Fixed height for consistency
+												padding: '0 16px',
+												margin: '0 0 2px 0',
+												height: 48,
 												cursor: 'pointer',
 												borderRadius: 8,
-												background: isSelected ? '#1e1b2e' : isHovered ? '#1f2129' : (isActive ? '#262626' : 'transparent'),
-												// Use box-shadow for the blue bar so it doesn't affect layout width (0 layout shift)
+												background: isSelected ? '#1e1b2e' : isHovered ? '#1f2129' : isActive ? '#262626' : 'transparent',
 												boxShadow: isSelected ? 'inset 3px 0 0 #8a83ff' : 'none',
 												transition: 'background 0.1s ease',
 												position: 'relative',
-												overflow: 'hidden'
+												overflow: 'hidden',
 											}}
 										>
-											{/* Checkbox / Spacer */}
-											<div style={{ width: 28, display: 'flex', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+											<div style={{ width: 28, display: 'flex', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
 												{(isHovered || isSelected) ? (
 													<Checkbox checked={isSelected} onChange={(e) => toggleSelection(item.id, e)} />
 												) : null}
 											</div>
 
-											{/* Content */}
 											<div style={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: 0 }}>
-												{/* Sender */}
 												<div style={{ width: 180, paddingRight: 16 }}>
 													<Text
 														strong={!item.read}
@@ -245,26 +328,32 @@ const MailRow = ({ user }) => {
 													</Text>
 												</div>
 
-												{/* Subject + Snippet */}
 												<div style={{ flex: 1, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
 													<Text strong={!item.read} ellipsis style={{ color: !item.read ? '#fff' : '#b0b0b0', fontSize: 13, marginRight: 8 }}>
-														{item.subject}
+														{item.subject || '(No subject)'}
 													</Text>
 													<Text ellipsis style={{ color: '#666', fontSize: 13, flex: 1 }}>
-														{item.snippet}
+														{item.snippet || 'No preview available'}
 													</Text>
 												</div>
 											</div>
 
-											{/* Right Actions */}
 											<div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 16 }}>
 												{item.tag && (
-													<Tag bordered={false} style={{ margin: 0, background: '#2b2640', color: '#a78bfa', fontSize: 11, borderRadius: 10 }}>
-														{item.tag}
+													<Tag
+														bordered={false}
+														style={{
+															margin: 0,
+															background: item.tag.color,
+															color: '#fff',
+															fontSize: 11,
+															borderRadius: 10,
+														}}
+													>
+														{item.tag.name}
 													</Tag>
 												)}
 
-												{/* Hover Actions (Absolute or Fixed Width to prevent jump) */}
 												{isHovered ? (
 													<div style={{ display: 'flex', gap: 12, color: '#888', minWidth: 60, justifyContent: 'flex-end' }}>
 														<DeleteOutlined />
@@ -273,7 +362,7 @@ const MailRow = ({ user }) => {
 													</div>
 												) : (
 													<Text style={{ color: '#666', fontSize: 12, minWidth: 60, textAlign: 'right' }}>
-														{item.time}
+														{item.displayTime}
 													</Text>
 												)}
 											</div>
@@ -282,17 +371,21 @@ const MailRow = ({ user }) => {
 								})}
 							</div>
 						))}
+						{loading && (
+							<div style={{ position: 'absolute', top: 12, right: 24 }}>
+								<Spin size="small" tip="Syncing Gmail..." />
+							</div>
+						)}
 					</div>
 				</div>
 
-				{/* --- RIGHT PANEL (Same as before) --- */}
 				{activeEmailId && activeEmail && (
 					<div style={{ flex: '1', display: 'flex', flexDirection: 'column', background: '#1f1f1f' }}>
-
-						{/* Preview Header */}
 						<div style={{ padding: '0 24px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #303030' }}>
 							<div style={{ display: 'flex', gap: '16px', color: '#a0a0a0' }}>
-								<Tooltip title="Close"><ArrowLeftOutlined onClick={() => setActiveEmailId(null)} style={{ cursor: 'pointer', color: '#fff' }} /></Tooltip>
+								<Tooltip title="Close">
+									<ArrowLeftOutlined onClick={() => setActiveEmailId(null)} style={{ cursor: 'pointer', color: '#fff' }} />
+								</Tooltip>
 								<span style={{ borderLeft: '1px solid #434343' }} />
 								<FolderOpenOutlined />
 								<DeleteOutlined />
@@ -304,17 +397,25 @@ const MailRow = ({ user }) => {
 							</div>
 						</div>
 
-						{/* Email Body */}
 						<div style={{ padding: '40px', overflowY: 'auto' }}>
-							<Title level={2} style={{ marginBottom: '16px' }}>{activeEmail.subject}</Title>
+							<Title level={2} style={{ marginBottom: '16px' }}>{activeEmail.subject || '(No subject)'}</Title>
 
 							<div style={{ display: 'flex', gap: '8px', marginBottom: '32px' }}>
-								<Tag bordered={false} style={{ background: '#303030', color: '#d9d9d9' }}>[Gmail]/Important <span style={{ marginLeft: 4 }}>×</span></Tag>
-								{activeEmail.tag && <Tag color="purple">{activeEmail.tag} <span style={{ marginLeft: 4 }}>×</span></Tag>}
+								{(activeEmail.labelIds || []).map(labelId => {
+									const label = labelLookup.get(labelId);
+									if (!label || label.type === 'system') return null;
+									return (
+										<Tag key={labelId} bordered={false} style={{ background: label.color?.backgroundColor || '#303030', color: label.color?.textColor || '#d9d9d9' }}>
+											{label.name}
+										</Tag>
+									);
+								})}
 							</div>
 
 							<div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '24px' }}>
-								<Avatar size={48} src={activeEmail.avatar} icon={<AppstoreOutlined />} style={{ backgroundColor: '#fff', color: '#000' }} />
+								<Avatar size={48} style={{ backgroundColor: '#fff', color: '#000' }}>
+									{(activeEmail.sender || 'A').slice(0, 1)}
+								</Avatar>
 								<div>
 									<Text strong style={{ fontSize: '16px', display: 'block' }}>{activeEmail.sender}</Text>
 									<Text type="secondary" style={{ fontSize: '12px' }}>to me <MoreOutlined /></Text>
@@ -322,33 +423,19 @@ const MailRow = ({ user }) => {
 								<div style={{ flex: 1 }} />
 								<div style={{ display: 'flex', gap: '12px', color: '#8c8c8c' }}>
 									<StarOutlined />
-									<Text type="secondary" style={{ fontSize: '12px' }}>{activeEmail.time}, 11:27 PM</Text>
+									<Text type="secondary" style={{ fontSize: '12px' }}>
+										{formatPreviewTimestamp(activeEmail.date)}
+									</Text>
 								</div>
 							</div>
 
-							<Paragraph style={{ fontSize: '16px', lineHeight: '1.8', color: '#d9d9d9' }}>
-								Dear Terry, <br /><br />
-								At Neo4j we aim at providing a great candidate experience. <br /><br />
-								As you recently applied to the GenAI Content Developer role, we'd appreciate you letting us know how your experience was. <br /><br />
-								Your feedback is extremely valuable to us.
-							</Paragraph>
-
-							{/* Simulated NPS Survey */}
-							<div style={{ marginTop: '40px', padding: '24px', background: '#141414', borderRadius: '8px' }}>
-								<Text strong style={{ display: 'block', marginBottom: '16px' }}>How much effort did it take to apply for a job?</Text>
-								<div style={{ display: 'flex', gap: '8px' }}>
-									{[1, 2, 3, 4, 5].map(num => (
-										<div key={num} style={{
-											width: 40, height: 40, background: '#006d75', color: '#fff',
-											display: 'flex', alignItems: 'center', justifyContent: 'center',
-											fontWeight: 'bold', borderRadius: 4, cursor: 'pointer'
-										}}>
-											{num}
-										</div>
-									))}
+							{activeEmail.plainBody ? (
+								<div style={{ fontSize: '16px', lineHeight: 1.8, color: '#d9d9d9' }}>
+									{renderMessageBody(activeEmail.plainBody)}
 								</div>
-							</div>
-
+							) : (
+								<Text style={{ color: '#8c8c8c' }}>No body preview available. Open in Gmail for the full message.</Text>
+							)}
 						</div>
 					</div>
 				)}

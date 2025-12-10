@@ -1,15 +1,24 @@
-import express from "express";
+import express, { type RequestHandler } from "express";
 import session from "express-session";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import cors from "cors";
+import mongoose from "mongoose";
 import { readFileSync } from "node:fs";
 import "dotenv/config";
+
+import { UserModel } from "./models/User";
+import {
+	listStoredLabels,
+	listStoredMessages,
+	syncMailboxForUser,
+} from "./services/gmailSync";
 
 declare global {
 	namespace Express {
 		interface User {
 			id: string;
+			googleId: string;
 			displayName: string;
 			email?: string;
 			photo?: string;
@@ -30,6 +39,9 @@ const credentials = JSON.parse(
 	readFileSync(new URL("./client_secret.json", import.meta.url), "utf-8"),
 ) as GoogleCredentials;
 
+process.env.GOOGLE_CLIENT_ID ??= credentials.web.client_id;
+process.env.GOOGLE_CLIENT_SECRET ??= credentials.web.client_secret;
+
 const CLIENT_URL =
 	process.env.CLIENT_URL ||
 	credentials.web.javascript_origins?.[0] ||
@@ -40,6 +52,15 @@ const GOOGLE_CALLBACK_URL =
 	`${CLIENT_URL}/api/auth/callback/google`;
 const SESSION_SECRET = process.env.SESSION_SECRET || "beam-dev-secret";
 const PORT = Number(process.env.PORT) || 4000;
+const MONGO_URI =
+	process.env.MONGO_URI || "mongodb://127.0.0.1:27017/beam";
+
+const ensureAuthenticated: RequestHandler = (req, res, next) => {
+	if (req.isAuthenticated()) {
+		return next();
+	}
+	res.status(401).json({ error: "Not authenticated" });
+};
 
 const app = express();
 
@@ -66,30 +87,80 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-passport.serializeUser((user, done) => {
-	done(null, user);
+passport.serializeUser((user: Express.User, done) => {
+	done(null, user.id);
 });
 
-passport.deserializeUser((user: Express.User, done) => {
-	done(null, user);
+passport.deserializeUser(async (id: string, done) => {
+	try {
+		const user = await UserModel.findById(id).lean();
+		if (!user) {
+			return done(null, false);
+		}
+
+		done(null, {
+			id: user._id.toString(),
+			googleId: user.googleId,
+			displayName: user.displayName,
+			email: user.email,
+			photo: user.photo,
+		});
+	} catch (error) {
+		done(error as Error);
+	}
 });
 
 passport.use(
 	new GoogleStrategy(
 		{
-			clientID: credentials.web.client_id,
-			clientSecret: credentials.web.client_secret,
+			clientID: process.env.GOOGLE_CLIENT_ID!,
+			clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
 			callbackURL: GOOGLE_CALLBACK_URL,
 		},
-		(_accessToken, _refreshToken, profile, done) => {
-			const user: Express.User = {
-				id: profile.id,
-				displayName: profile.displayName,
-				email: profile.emails?.[0]?.value,
-				photo: profile.photos?.[0]?.value,
-			};
+		async (accessToken, refreshToken, profile, done) => {
+			try {
+				const approxExpiry = new Date(Date.now() + 55 * 60 * 1000);
 
-			done(null, user);
+				const update: Record<string, unknown> = {
+					googleId: profile.id,
+					displayName: profile.displayName,
+					email: profile.emails?.[0]?.value,
+					photo: profile.photos?.[0]?.value,
+				};
+
+				if (accessToken) {
+					update.accessToken = accessToken;
+					update.tokenExpiry = approxExpiry;
+				}
+
+				if (refreshToken) {
+					update.refreshToken = refreshToken;
+				}
+
+				const user = await UserModel.findOneAndUpdate(
+					{ googleId: profile.id },
+					{ $set: update },
+					{
+						upsert: true,
+						new: true,
+						setDefaultsOnInsert: true,
+					},
+				);
+
+				if (!user) {
+					return done(new Error("Failed to upsert user"));
+				}
+
+				done(null, {
+					id: user._id.toString(),
+					googleId: user.googleId,
+					displayName: user.displayName,
+					email: user.email,
+					photo: user.photo,
+				});
+			} catch (error) {
+				done(error as Error);
+			}
 		},
 	),
 );
@@ -101,8 +172,10 @@ app.get("/api/health", (_req, res) => {
 app.get(
 	"/api/auth/google",
 	passport.authenticate("google", {
-		scope: ["profile", "email"],
-		prompt: "select_account",
+		scope: ["profile", "email", "https://www.googleapis.com/auth/gmail.modify"],
+		prompt: "consent select_account",
+		accessType: "offline",
+		includeGrantedScopes: true,
 		session: true,
 	}),
 );
@@ -150,12 +223,96 @@ app.post("/api/auth/logout", (req, res, next) => {
 	});
 });
 
+app.post("/api/gmail/sync", ensureAuthenticated, async (req, res, next) => {
+	try {
+		const summary = await syncMailboxForUser(req.user.id, {
+			forceFull: req.body?.mode === "full",
+		});
+
+		res.json({ ok: true, summary });
+	} catch (error) {
+		next(error);
+	}
+});
+
+app.get("/api/gmail/messages", ensureAuthenticated, async (req, res, next) => {
+	try {
+		const limit = Math.min(
+			Number.parseInt(String(req.query.limit ?? "50"), 10) || 50,
+			200,
+		);
+		const labelId =
+			typeof req.query.labelId === "string" ? req.query.labelId : undefined;
+
+		const messages = await listStoredMessages(req.user.id, limit, labelId);
+		const payload = messages.map(message => ({
+			id: message.gmailId,
+			threadId: message.threadId,
+			historyId: message.historyId,
+			labelIds: message.labelIds,
+			subject: message.subject,
+			snippet: message.snippet,
+			from: message.from,
+			to: message.to,
+			internalDate: message.internalDate?.toISOString(),
+			plainBody: message.plainBody,
+			htmlBody: message.htmlBody,
+		}));
+
+		res.json({ messages: payload });
+	} catch (error) {
+		next(error);
+	}
+});
+
+app.get("/api/gmail/labels", ensureAuthenticated, async (req, res, next) => {
+	try {
+		const labels = await listStoredLabels(req.user.id);
+		const payload = labels.map(label => ({
+			id: label.labelId,
+			name: label.name,
+			type: label.type,
+			messageListVisibility: label.messageListVisibility,
+			labelListVisibility: label.labelListVisibility,
+			messagesTotal: label.messagesTotal,
+			messagesUnread: label.messagesUnread,
+			color: label.color,
+		}));
+
+		res.json({ labels: payload });
+	} catch (error) {
+		next(error);
+	}
+});
+
 app.use((_req, res) => {
 	res.status(404).json({
 		error: "Not found",
 	});
 });
 
-app.listen(PORT, () => {
-	console.log(`Beam backend listening on http://localhost:${PORT}`);
+app.use(
+	(
+		error: Error,
+		_req: express.Request,
+		res: express.Response,
+		_next: express.NextFunction,
+	) => {
+		console.error(error);
+		res.status(500).json({ error: error.message });
+	},
+);
+
+const start = async () => {
+	await mongoose.connect(MONGO_URI);
+	console.log("Connected to MongoDB");
+
+	app.listen(PORT, () => {
+		console.log(`Beam backend listening on http://localhost:${PORT}`);
+	});
+};
+
+start().catch(error => {
+	console.error("Failed to start server", error);
+	process.exit(1);
 });
